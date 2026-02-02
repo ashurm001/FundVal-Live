@@ -105,13 +105,22 @@ class AIService:
         
         try:
             raw_result = await chain.ainvoke({})
+            # Debug log
+            print(f"LLM Raw Output: {raw_result}")
+            
             # Naive JSON extraction if LLM outputs markdown code block
-            clean_json = raw_result.strip().replace("```json", "").replace("```", "")
+            clean_json = raw_result.strip()
+            if "```json" in clean_json:
+                clean_json = clean_json.split("```json")[1].split("```")[0]
+            elif "```" in clean_json:
+                clean_json = clean_json.split("```")[1].split("```")[0]
+            
             import json
             result = json.loads(clean_json)
             result["timestamp"] = datetime.datetime.now().strftime("%H:%M:%S")
             return result
         except Exception as e:
+            print(f"AI Analysis Error: {e}")
             return {
                 "summary": f"分析生成失败: {str(e)}",
                 "risk": "未知",

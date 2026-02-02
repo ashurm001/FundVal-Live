@@ -21,12 +21,12 @@ def fund_detail(fund_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/fund/{fund_id}/history")
-def fund_history(fund_id: str):
+def fund_history(fund_id: str, limit: int = 30):
     """
     Get historical NAV data for charts.
     """
     try:
-        return get_fund_history(fund_id)
+        return get_fund_history(fund_id, limit=limit)
     except Exception as e:
         # Don't break UI if history fails
         print(f"History error: {e}")

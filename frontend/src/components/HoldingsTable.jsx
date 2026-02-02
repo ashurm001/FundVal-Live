@@ -7,7 +7,7 @@ export const HoldingsTable = ({ holdings = [] }) => {
     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
       <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
         <PieChart className="w-5 h-5 text-slate-400" />
-        前十大重仓股
+        持仓股明细
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">

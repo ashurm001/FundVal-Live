@@ -1,7 +1,10 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Load .env from project root (one level up from backend)
+load_dotenv(BASE_DIR.parent / ".env")
 
 class Config:
     # Database

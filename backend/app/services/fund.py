@@ -139,8 +139,8 @@ def get_fund_history(code: str, limit: int = 30) -> List[Dict[str, Any]]:
     """
     try:
         # ak.fund_open_fund_info_em returns historical data
-        # columns: 净值日期, 单位净值, 累计净值, 日增长率...
-        df = ak.fund_open_fund_info_em(fund=code, indicator="单位净值走势")
+        # Correct arg is 'symbol', not 'fund'
+        df = ak.fund_open_fund_info_em(symbol=code, indicator="单位净值走势")
         if df is None or df.empty:
             return []
             
@@ -180,11 +180,12 @@ def get_fund_intraday(code: str) -> Dict[str, Any]:
     holdings = []
     try:
         current_year = str(time.localtime().tm_year)
-        # ak.fund_portfolio_hold_em returns dataframe with columns like "序号", "股票代码", "股票名称", "占净值比例", "持股数", "持仓市值"
-        holdings_df = ak.fund_portfolio_hold_em(code=code, year=current_year)
+        # ak.fund_portfolio_hold_em returns dataframe
+        # Correct arg is 'symbol', not 'code'
+        holdings_df = ak.fund_portfolio_hold_em(symbol=code, date=current_year)
         if holdings_df is None or holdings_df.empty:
              prev_year = str(time.localtime().tm_year - 1)
-             holdings_df = ak.fund_portfolio_hold_em(code=code, year=prev_year)
+             holdings_df = ak.fund_portfolio_hold_em(symbol=code, date=prev_year)
     except Exception as e:
         print(f"Holdings fetch error: {e}")
         holdings_df = pd.DataFrame()
