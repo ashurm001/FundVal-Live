@@ -10,6 +10,7 @@ const Account = ({ onSelectFund, onPositionChange, onSyncWatchlist, syncLoading 
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPos, setEditingPos] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({ code: '', cost: '', shares: '' });
@@ -64,7 +65,9 @@ const Account = ({ onSelectFund, onPositionChange, onSyncWatchlist, syncLoading 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.code || !formData.cost || !formData.shares) return;
-    
+    if (submitting) return; // Prevent duplicate submission
+
+    setSubmitting(true);
     try {
       await updatePosition({
         code: formData.code,
@@ -76,6 +79,8 @@ const Account = ({ onSelectFund, onPositionChange, onSyncWatchlist, syncLoading 
       fetchData();
     } catch (e) {
       alert('保存失败');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -173,9 +178,9 @@ const Account = ({ onSelectFund, onPositionChange, onSyncWatchlist, syncLoading 
 
       {/* 3. Table */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-base text-left">
-            <thead className="bg-slate-50 text-slate-500 font-medium text-xs uppercase tracking-wider">
+            <thead className="bg-slate-50 text-slate-500 font-medium text-xs uppercase tracking-wider sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="px-4 py-3 text-left">基金</th>
                 <th className="px-4 py-3 text-right">净值 | 估值</th>
@@ -324,11 +329,12 @@ const Account = ({ onSelectFund, onPositionChange, onSyncWatchlist, syncLoading 
               </div>
 
               <div className="pt-2">
-                <button 
+                <button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm active:scale-[0.98]"
+                  disabled={submitting}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  保存
+                  {submitting ? '保存中...' : '保存'}
                 </button>
               </div>
             </form>
