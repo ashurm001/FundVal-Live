@@ -51,9 +51,6 @@ jobs:
           uv pip install --system -r backend/requirements.txt
           uv pip install --system pyinstaller
 
-      - name: Build backend with PyInstaller
-        run: uv run pyinstaller backend.spec --clean
-
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
@@ -61,6 +58,9 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+
+      - name: Build backend with PyInstaller
+        run: uv run pyinstaller backend.spec --clean
 
       - name: Install Electron dependencies
         run: npm ci
