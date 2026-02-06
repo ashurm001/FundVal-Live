@@ -17,10 +17,10 @@ RUN pip install --no-cache-dir uv
 WORKDIR /app
 
 # Copy dependency files first (for layer caching)
-COPY pyproject.toml uv.lock ./
+COPY backend/requirements.txt ./backend/
 
 # Install backend dependencies
-RUN uv pip install --system --no-cache .
+RUN cd backend && uv pip install --system --no-cache -r requirements.txt
 
 # Copy backend code
 COPY backend/ ./backend/
