@@ -73,6 +73,13 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
           </div>
 
           <div className="flex flex-col gap-1">
+            <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">成本总额</div>
+            <div className="text-2xl font-bold text-slate-600">
+              ¥{(summary?.total_cost || 0).toLocaleString()}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
             <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">预估总盈亏</div>
             <div className={`text-2xl font-bold ${getRateColor(summary?.total_income || 0)}`}>
               {(summary?.total_income || 0) > 0 ? '+' : ''}¥{(summary?.total_income || 0).toLocaleString()}

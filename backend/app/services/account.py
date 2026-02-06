@@ -52,7 +52,17 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
             try:
                 # Default safe values
                 data = future.result() or {}
-                name = data.get("name", code)
+                name = data.get("name")
+
+                # If name is missing, fetch from database
+                if not name:
+                    conn_temp = get_db_connection()
+                    cursor_temp = conn_temp.cursor()
+                    cursor_temp.execute("SELECT name FROM funds WHERE code = ?", (code,))
+                    db_row = cursor_temp.fetchone()
+                    conn_temp.close()
+                    name = db_row["name"] if db_row else code
+
                 nav = float(data.get("nav", 0.0))
                 estimate = float(data.get("estimate", 0.0))
                 # If estimate is 0 (e.g. market closed or error), use NAV
