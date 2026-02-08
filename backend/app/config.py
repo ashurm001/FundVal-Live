@@ -69,6 +69,11 @@ class Config:
     STOCK_SPOT_CACHE_DURATION = 60     # 1 minute (for holdings calculation)
 
     # AI Configuration - 动态读取
+    # 支持OpenAI和DeepSeek等兼容OpenAI API格式的模型
+    # DeepSeek配置示例：
+    # OPENAI_API_KEY = "your_deepseek_api_key"
+    # OPENAI_API_BASE = "https://api.deepseek.com/v1"
+    # AI_MODEL_NAME = "deepseek-chat"
     OPENAI_API_KEY = _get_setting("OPENAI_API_KEY", "")
     OPENAI_API_BASE = _get_setting("OPENAI_API_BASE", "https://api.openai.com/v1")
     AI_MODEL_NAME = _get_setting("AI_MODEL_NAME", "gpt-3.5-turbo")

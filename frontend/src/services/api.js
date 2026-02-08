@@ -112,3 +112,14 @@ export const getTransactions = async (accountId = 1, code = null, limit = 100) =
 export const updatePositionsNav = async (accountId = 1) => {
     return api.post('/account/positions/update-nav', null, { params: { account_id: accountId } });
 };
+
+// Get latest NAV data
+export const getFundLatestNav = async (fundId) => {
+    try {
+        const response = await api.get(`/fund/${fundId}/latest-nav`);
+        return response.data;
+    } catch (error) {
+        console.error(`Get latest NAV for ${fundId} failed`, error);
+        return null;
+    }
+};

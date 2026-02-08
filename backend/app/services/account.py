@@ -43,6 +43,7 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                 # Default safe values
                 data = future.result() or {}
                 name = data.get("name")
+                latest_nav = float(data.get("latest_nav", 0.0))
                 fund_type = None
 
                 # If name is missing, fetch from database
@@ -117,8 +118,11 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                     day_income = 0.0
                     est_market_value = nav_market_value # Fallback to confirmed value
                 
-                # C. Total Projected
-                total_income = accumulated_income + day_income
+                # Calculate day income from latest NAV (actual daily change)
+                day_income_from_nav = (latest_nav - nav) * shares if latest_nav > 0 else 0.0
+                
+                # C. Total Income (Based on latest NAV)
+                total_income = (latest_nav - cost) * shares if latest_nav > 0 else (nav - cost) * shares
                 total_return_rate = (total_income / cost_basis * 100) if cost_basis > 0 else 0.0
                 
                 positions.append({
@@ -128,6 +132,7 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                     "cost": cost,
                     "shares": shares,
                     "nav": nav,
+                    "latest_nav": latest_nav,
                     "nav_date": data.get("navDate", "--"), # If available, else implicit
                     "nav_updated_today": nav_updated_today,
                     "estimate": estimate,
@@ -144,6 +149,7 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                     "accumulated_return_rate": round(accumulated_return_rate, 2),
                     
                     "day_income": round(day_income, 2),
+                    "day_income_from_nav": round(day_income_from_nav, 2),
                     
                     "total_income": round(total_income, 2),
                     "total_return_rate": round(total_return_rate, 2),

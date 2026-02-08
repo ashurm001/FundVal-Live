@@ -10,6 +10,10 @@ import requests
 from ..db import get_db_connection
 from ..config import Config
 
+# 全局缓存：避免短时间内重复请求相同基金的数据
+_nav_cache = {}
+_cache_expiry = 3600  # 缓存过期时间（秒）
+
 
 def get_fund_type(code: str, name: str) -> str:
     """
@@ -116,7 +120,82 @@ def get_combined_valuation(code: str) -> Dict[str, Any]:
         if sina_data:
             # Merge Sina info into Eastmoney structure
             data.update(sina_data)
+    
+    # Get latest NAV and add to result
+    latest_nav_data = get_latest_nav(code)
+    if latest_nav_data:
+        data["latest_nav"] = latest_nav_data.get("latest_nav")
+    else:
+        # Fallback to previous day's NAV if latest NAV not available
+        data["latest_nav"] = data.get("nav")
+    
     return data
+
+
+def get_latest_nav(code: str) -> Dict[str, Any]:
+    """
+    使用 AkShare 获取基金最新净值
+    返回：{"latest_date": "2026-02-06", "latest_nav": 1.8678}
+    """
+    # 检查缓存
+    current_time = time.time()
+    if code in _nav_cache:
+        cached_data, cache_time = _nav_cache[code]
+        if current_time - cache_time < _cache_expiry:
+            return cached_data
+    
+    result = None
+    try:
+        # 获取单位净值走势
+        df = ak.fund_open_fund_info_em(symbol=code, indicator="单位净值走势")
+        
+        if df is not None and not df.empty:
+            # 按日期排序，取最新记录
+            df_sorted = df.sort_values(by="净值日期", ascending=False)
+            
+            if len(df_sorted) >= 1:
+                latest_row = df_sorted.iloc[0]
+                latest_date = latest_row["净值日期"]
+                latest_nav = float(latest_row["单位净值"])
+                
+                result = {
+                    "latest_date": str(latest_date),
+                    "latest_nav": latest_nav
+                }
+                
+                # 存入缓存
+                _nav_cache[code] = (result, current_time)
+                
+    except Exception as e:
+        print(f"Error getting NAV for {code}: {e}")
+        
+        # 尝试使用备用方法获取净值
+        try:
+            # 使用新浪财经API作为备用
+            url = f"http://hq.sinajs.cn/list=fu_{code}"
+            headers = {"Referer": "http://finance.sina.com.cn"}
+            response = requests.get(url, headers=headers, timeout=5)
+            text = response.text
+            
+            # var hq_str_fu_005827="Name,15:00:00,1.234,1.230,...";
+            match = re.search(r'="(.*)"', text)
+            if match and match.group(1):
+                parts = match.group(1).split(',')
+                if len(parts) >= 8:
+                    latest_nav = float(parts[3])
+                    latest_date = parts[7]
+                    
+                    result = {
+                        "latest_date": latest_date,
+                        "latest_nav": latest_nav
+                    }
+                    
+                    # 存入缓存
+                    _nav_cache[code] = (result, current_time)
+        except Exception as backup_error:
+            print(f"Backup method failed for {code}: {backup_error}")
+    
+    return result
 
 
 def search_funds(q: str) -> List[Dict[str, Any]]:
@@ -359,14 +438,29 @@ def get_fund_history(code: str, limit: int = 30) -> List[Dict[str, Any]]:
     cache_valid = False
     if rows:
         latest_update = rows[0]["updated_at"]
+        latest_date = rows[0]["date"]
         # Parse timestamp
         try:
-            from datetime import datetime
+            from datetime import datetime, timedelta
             update_time = datetime.fromisoformat(latest_update)
             age_hours = (datetime.now() - update_time).total_seconds() / 3600
             # For "all history" requests, require more data to consider cache valid
             min_rows = 10 if limit < 9999 else 100
-            cache_valid = age_hours < 24 and len(rows) >= min(limit, min_rows)
+            
+            # Check if latest data is today or yesterday (considering NAV publish time)
+            today = datetime.now().strftime("%Y-%m-%d")
+            yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            is_recent_data = latest_date == today or latest_date == yesterday
+            
+            # Check if we should refresh for today's data
+            current_hour = datetime.now().hour
+            force_refresh = current_hour >= 16 and latest_date != today
+            
+            # Cache is valid only if:
+            # 1. Update time is less than 24 hours old
+            # 2. Has enough data rows
+            # 3. Data is recent OR it's before NAV publish time
+            cache_valid = age_hours < 24 and len(rows) >= min(limit, min_rows) and (is_recent_data or not force_refresh)
         except:
             pass
 
@@ -486,6 +580,7 @@ def get_fund_intraday(code: str) -> Dict[str, Any]:
     
     name = em_data.get("name")
     nav = float(em_data.get("nav", 0.0))
+    latest_nav = float(em_data.get("latest_nav", nav))
     estimate = float(em_data.get("estimate", 0.0))
     est_rate = float(em_data.get("estRate", 0.0))
     update_time = em_data.get("time", time.strftime("%H:%M:%S"))
@@ -567,6 +662,7 @@ def get_fund_intraday(code: str) -> Dict[str, Any]:
         "type": sector, 
         "manager": manager,
         "nav": nav,
+        "latest_nav": latest_nav,
         "estimate": estimate,
         "estRate": est_rate,
         "time": update_time,

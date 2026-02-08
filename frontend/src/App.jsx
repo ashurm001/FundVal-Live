@@ -310,9 +310,6 @@ export default function App() {
                 <h1 className="text-lg font-bold text-slate-800 leading-tight">
                   {currentView === 'detail' ? '基金详情' : (currentView === 'account' ? '我的账户' : (currentView === 'settings' ? '设置' : 'FundVal Live'))}
                 </h1>
-                <p className="text-xs text-slate-400">
-                  {currentView === 'detail' ? '盘中实时估值分析' : '盘中估值参考工具'}
-                </p>
               </div>
             </div>
 

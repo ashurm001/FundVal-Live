@@ -64,8 +64,8 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
   })).sort((a, b) => b.value - a.value);
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-      <div className="flex justify-between items-center mb-4">
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <div className="flex justify-between items-center mb-3">
         <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider">资产概览</h3>
         <button
           onClick={onRefresh}
@@ -75,44 +75,44 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      <div className="flex gap-6">
+      
+      {/* PC端：左右布局 | 移动端：上下布局 */}
+      <div className="flex flex-col md:flex-row gap-4">
         {/* 左侧：统计数据 */}
-        <div className="flex flex-col gap-4 min-w-[240px]">
-          <div className="flex flex-col gap-1">
-            <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">预估总资产</div>
-            <div className="text-2xl font-bold text-slate-800">
+        <div className="w-full md:w-1/2 grid grid-cols-2 gap-2">
+          <div className="bg-slate-50 p-2 rounded-lg">
+            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">预估总资产</div>
+            <div className="text-lg font-bold text-slate-800">
               ¥{(summary?.total_market_value || 0).toLocaleString()}
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">成本总额</div>
-            <div className="text-2xl font-bold text-slate-600">
+          <div className="bg-slate-50 p-2 rounded-lg">
+            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">成本总额</div>
+            <div className="text-lg font-bold text-slate-600">
               ¥{(summary?.total_cost || 0).toLocaleString()}
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">预估总盈亏</div>
-            <div className={`text-2xl font-bold ${getRateColor(summary?.total_income || 0)}`}>
-              {(summary?.total_income || 0) > 0 ? '+' : ''}¥{(summary?.total_income || 0).toLocaleString()}
-            </div>
-            <div className={`text-sm font-medium ${getRateColor(summary?.total_income || 0)}`}>
-              {(summary?.total_return_rate || 0) > 0 ? '+' : ''}{(summary?.total_return_rate || 0).toFixed(2)}%
+          <div className="bg-slate-50 p-2 rounded-lg">
+            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">当日实际盈亏</div>
+            <div className={`text-lg font-bold ${getRateColor(positions.reduce((total, pos) => total + (pos.day_income_from_nav || pos.day_income || 0), 0))}`}>
+              {(positions.reduce((total, pos) => total + (pos.day_income_from_nav || pos.day_income || 0), 0)) > 0 ? '+' : ''}¥{positions.reduce((total, pos) => total + (pos.day_income_from_nav || pos.day_income || 0), 0).toLocaleString()}
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">当日预估盈亏</div>
-            <div className={`text-2xl font-bold ${getRateColor(summary?.total_day_income || 0)}`}>
+          <div className="bg-slate-50 p-2 rounded-lg">
+            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">当日预估盈亏</div>
+            <div className={`text-lg font-bold ${getRateColor(summary?.total_day_income || 0)}`}>
               {(summary?.total_day_income || 0) > 0 ? '+' : ''}¥{(summary?.total_day_income || 0).toLocaleString()}
             </div>
           </div>
         </div>
 
-        {/* 右侧：饼图 */}
-        <div className="flex-1 min-h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
+        {/* 右侧：资产类型分布 */}
+        <div className="w-full md:w-1/2 h-[200px]">
+          <h4 className="text-xs font-medium text-slate-600 mb-1">资产类型分布</h4>
+          <ResponsiveContainer width="100%" height="90%">
             <PieChart>
               <Pie
                 data={data}
@@ -120,7 +120,7 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
                 cy="50%"
                 labelLine={false}
                 label={renderCustomizedLabel}
-                outerRadius={80}
+                outerRadius={70}
                 fill="#8884d8"
                 dataKey="value"
                 paddingAngle={2}
@@ -129,7 +129,7 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '12px' }}/>
+              <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ fontSize: '10px', marginTop: '0px', marginBottom: '0px' }}/>
               <Tooltip
                 formatter={(value) => `¥${value.toLocaleString()}`}
                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}

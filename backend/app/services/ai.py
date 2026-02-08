@@ -27,6 +27,11 @@ class AIService:
         if not api_key:
             return None
 
+        # 支持OpenAI和DeepSeek等兼容OpenAI API格式的模型
+        # DeepSeek配置示例：
+        # OPENAI_API_KEY = "your_deepseek_api_key"
+        # OPENAI_API_BASE = "https://api.deepseek.com/v1"
+        # AI_MODEL_NAME = "deepseek-chat"
         return ChatOpenAI(
             model=model,
             openai_api_key=api_key,

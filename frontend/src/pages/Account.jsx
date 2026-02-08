@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, X, Edit2, Trash2, RefreshCw, ArrowUpDown, ChevronDown, TrendingUp, TrendingDown, History, Download, CheckCircle, Clock } from 'lucide-react';
-import { getAccountPositions, updatePosition, deletePosition, addPositionTrade, reducePositionTrade, getTransactions, updatePositionsNav } from '../services/api';
+import { getAccountPositions, updatePosition, deletePosition, addPositionTrade, reducePositionTrade, getTransactions, updatePositionsNav, getFundLatestNav } from '../services/api';
 import { getRateColor } from '../components/StatCard';
 import { PortfolioChart } from '../components/PortfolioChart';
 
@@ -78,6 +78,8 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
     setError(null);
     try {
       const res = await getAccountPositions(currentAccount);
+      
+      // 后端已经返回了 latest_nav 和 day_income_from_nav 字段，不需要再单独调用 API
       setData(res);
     } catch (e) {
       console.error(e);
@@ -327,14 +329,14 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
       )}
 
       {/* 2. Actions */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <h2 className="text-xl font-bold text-slate-800">持仓明细</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 justify-start md:justify-end">
             {/* 排序下拉菜单 */}
             <div className="relative" ref={sortDropdownRef}>
               <button
                 onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-                className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+                className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap"
               >
                 <ArrowUpDown className="w-4 h-4" />
                 排序
@@ -363,7 +365,7 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
             <button
               onClick={handleSync}
               disabled={syncLoading}
-              className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               title="将持仓基金添加到关注列表"
             >
               <RefreshCw className={`w-4 h-4 ${syncLoading ? 'animate-spin' : ''}`} />
@@ -372,7 +374,7 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
             <button
               onClick={handleUpdateNav}
               disabled={navUpdating}
-              className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 hover:text-green-600 hover:border-green-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 hover:text-green-600 hover:border-green-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               title="手动更新所有持仓基金的净值"
             >
               <Download className={`w-4 h-4 ${navUpdating ? 'animate-spin' : ''}`} />
@@ -380,7 +382,7 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
             </button>
             <button
               onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap"
             >
               <Plus className="w-4 h-4" />
               记一笔
@@ -388,109 +390,170 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
         </div>
       </div>
 
-      {/* 3. Table */}
+      {/* 3. Table / Cards */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div>
-          <table className="w-full text-base text-left border-collapse">
-            <thead className="bg-slate-50 text-slate-500 font-medium text-xs uppercase tracking-wider sticky top-[73px] z-30 shadow-sm">
-              <tr>
-                <th className="px-4 py-3 text-left border-b border-slate-100 bg-slate-50 rounded-tl-xl">基金</th>
-                <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">净值 | 估值</th>
-                <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">份额 | 成本</th>
-                <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">持有收益</th>
-                <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">当日预估</th>
-                <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">预估总值</th>
-                <th className="px-4 py-3 text-center border-b border-slate-100 bg-slate-50 rounded-tr-xl">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-base">
-              {sortedPositions.length === 0 ? (
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <div className="min-w-[800px]">
+            <table className="w-full text-base text-left border-collapse">
+              <thead className="bg-slate-50 text-slate-500 font-medium text-xs uppercase tracking-wider sticky top-0 z-30 shadow-sm">
                 <tr>
-                  <td colSpan="7" className="px-4 py-8 text-center text-slate-400">
-                    暂无持仓，快去记一笔吧
-                  </td>
+                  <th className="px-4 py-3 text-left border-b border-slate-100 bg-slate-50 rounded-tl-xl">基金</th>
+                  <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">估值 | 预估收益</th>
+                  <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">份额 | 成本</th>
+                  <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">当日净值 | 收益</th>
+                  <th className="px-4 py-3 text-right border-b border-slate-100 bg-slate-50">当日总值</th>
+                  <th className="px-4 py-3 text-center border-b border-slate-100 bg-slate-50 rounded-tr-xl">操作</th>
                 </tr>
-              ) : sortedPositions.map((pos) => (
-                <tr key={pos.code} className="hover:bg-slate-50 transition-colors">
-                  <td 
-                    className="px-4 py-3 cursor-pointer group max-w-[180px]"
-                    onClick={() => onSelectFund && onSelectFund(pos.code)}
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-base">
+                {sortedPositions.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-4 py-8 text-center text-slate-400">
+                      暂无持仓，快去记一笔吧
+                    </td>
+                  </tr>
+                ) : sortedPositions.map((pos) => (
+                  <tr key={pos.code} className="hover:bg-slate-50 transition-colors">
+                    <td 
+                      className="px-4 py-3 cursor-pointer group max-w-[180px]"
+                      onClick={() => onSelectFund && onSelectFund(pos.code)}
+                    >
+                      <div className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors truncate" title={pos.name}>{pos.name}</div>
+                      <div className="text-xs text-slate-400 font-mono">{pos.code}</div>
+                    </td>
+                    
+                    <td className="px-4 py-3 text-right font-mono">
+                      <div className="font-mono text-slate-600" title="估值">{pos.estimate > 0 ? pos.estimate.toFixed(4) : '--'}</div>
+                      <div className={`font-medium ${getRateColor(pos.day_income)}`} title="预估收益">
+                          {pos.is_est_valid ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-right font-mono text-slate-600">
+                      <div>{pos.shares.toLocaleString()}</div>
+                      <div className="text-xs text-slate-400">{pos.cost.toFixed(4)}</div>
+                    </td>
+
+                    <td className="px-4 py-3 text-right font-mono">
+                      <div className="font-mono text-slate-600" title="当日净值">{pos.latest_nav ? pos.latest_nav.toFixed(4) : pos.nav.toFixed(4)}</div>
+                      <div className={`font-medium ${getRateColor(pos.day_income_from_nav || pos.day_income)}`} title="当日收益">
+                          {pos.day_income_from_nav ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
+                           pos.day_income ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-right font-mono">
+                       <div className="text-slate-800 font-medium">
+                         {(pos.latest_nav ? (pos.latest_nav * pos.shares) : pos.est_market_value).toLocaleString()}
+                       </div>
+                       <div className={`text-xs ${getRateColor(pos.total_income)}`}>
+                          {pos.total_income > 0 ? '+' : ''}{pos.total_income}
+                       </div>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex justify-center gap-2">
+                        <button 
+                          onClick={() => handleOpenModal(pos)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                          title="修改持仓"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(pos.code)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          title="删除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden p-4 space-y-3">
+          {sortedPositions.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">
+              暂无持仓，快去记一笔吧
+            </div>
+          ) : sortedPositions.map((pos) => (
+            <div key={pos.code} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <div className="flex justify-between items-start mb-3">
+                <div 
+                  className="flex-1 cursor-pointer group pr-2"
+                  onClick={() => onSelectFund && onSelectFund(pos.code)}
+                >
+                  <div className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-colors break-words leading-tight" title={pos.name}>{pos.name}</div>
+                  <div className="text-xs text-slate-400 font-mono">{pos.code}</div>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button 
+                    onClick={() => handleOpenModal(pos)}
+                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                    title="修改持仓"
                   >
-                    <div className="font-medium text-slate-800 group-hover:text-blue-600 transition-colors truncate" title={pos.name}>{pos.name}</div>
-                    <div className="text-xs text-slate-400 font-mono">{pos.code}</div>
-                  </td>
-                  
-                  {/* Price Column */}
-                  <td className="px-4 py-3 text-right font-mono">
-                    <div className="flex items-center justify-end gap-1">
-                      <div className="text-slate-500 text-xs" title="昨日净值">{pos.nav.toFixed(4)}</div>
-                      {pos.nav_updated_today ? (
-                        <CheckCircle className="w-3 h-3 text-green-500" title="当日净值已更新" />
-                      ) : (
-                        <Clock className="w-3 h-3 text-slate-300" title="当日净值未更新" />
-                      )}
-                    </div>
-                    <div className={`font-medium ${getRateColor(pos.est_rate)}`} title="实时估值">
-                        {pos.estimate > 0 ? pos.estimate.toFixed(4) : '--'}
-                    </div>
-                  </td>
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(pos.code)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
 
-                  {/* Position Column */}
-                  <td className="px-4 py-3 text-right font-mono text-slate-600">
-                    <div>{pos.shares.toLocaleString()}</div>
-                    <div className="text-xs text-slate-400">{pos.cost.toFixed(4)}</div>
-                  </td>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">估值 | 预估收益</div>
+                  <div className="font-mono text-slate-600">{pos.estimate > 0 ? pos.estimate.toFixed(4) : '--'}</div>
+                  <div className={`font-medium ${getRateColor(pos.day_income)}`}>
+                    {pos.is_est_valid ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
+                  </div>
+                </div>
 
-                  {/* Accumulated Income (Historical) */}
-                  <td className="px-4 py-3 text-right font-mono">
-                    <div className={`font-medium ${getRateColor(pos.accumulated_income)}`}>
-                        {pos.accumulated_income > 0 ? '+' : ''}{pos.accumulated_income}
-                    </div>
-                    <div className={`text-xs ${getRateColor(pos.accumulated_return_rate)}`}>
-                        {pos.accumulated_return_rate > 0 ? '+' : ''}{pos.accumulated_return_rate}%
-                    </div>
-                  </td>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">当日净值 | 收益</div>
+                  <div className="font-mono text-slate-600">{pos.latest_nav ? pos.latest_nav.toFixed(4) : pos.nav.toFixed(4)}</div>
+                  <div className={`font-medium ${getRateColor(pos.day_income_from_nav || pos.day_income)}`}>
+                    {pos.day_income_from_nav ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
+                     pos.day_income ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
+                  </div>
+                </div>
 
-                  {/* Intraday Income (Real-time) */}
-                  <td className="px-4 py-3 text-right font-mono">
-                    <div className={`font-medium ${!pos.is_est_valid ? 'text-slate-300' : getRateColor(pos.day_income)}`}>
-                        {pos.is_est_valid ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
-                    </div>
-                    <div className={`text-xs ${!pos.is_est_valid ? 'text-slate-300' : getRateColor(pos.est_rate)}`}>
-                        {pos.is_est_valid ? (pos.est_rate > 0 ? '+' : '') + pos.est_rate + '%' : '--'}
-                    </div>
-                  </td>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">份额 | 成本</div>
+                  <div className="font-mono text-slate-600">{pos.shares.toLocaleString()}</div>
+                  <div className="text-xs text-slate-400">{pos.cost.toFixed(4)}</div>
+                </div>
 
-                  {/* Total Projected */}
-                  <td className="px-4 py-3 text-right font-mono">
-                     <div className="text-slate-800 font-medium">{pos.est_market_value.toLocaleString()}</div>
-                     <div className={`text-xs ${getRateColor(pos.total_income)}`}>
+                <div className="col-span-3 pt-2 border-t border-slate-200">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-xs text-slate-400 mb-1">当日总值</div>
+                      <div className="text-base text-slate-800">
+                        {(pos.latest_nav ? (pos.latest_nav * pos.shares) : pos.est_market_value).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-400 mb-1">总收益</div>
+                      <div className={`text-sm ${getRateColor(pos.total_income)}`}>
                         {pos.total_income > 0 ? '+' : ''}{pos.total_income}
-                     </div>
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <div className="flex justify-center gap-2">
-                      <button 
-                        onClick={() => handleOpenModal(pos)}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                        title="修改持仓"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(pos.code)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                        title="删除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

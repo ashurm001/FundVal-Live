@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException, Query, Body
-from ..services.fund import search_funds, get_fund_intraday, get_fund_history
+from ..services.fund import search_funds, get_fund_intraday, get_fund_history, get_latest_nav
 from ..config import Config
 
 from ..services.subscription import add_subscription
@@ -139,6 +139,20 @@ def fund_intraday(fund_id: str, date: str = None):
         "snapshots": snapshots,
         "lastCollectedAt": snapshots[-1]["time"] if snapshots else None
     }
+
+@router.get("/fund/{fund_id}/latest-nav")
+def fund_latest_nav(fund_id: str):
+    """
+    获取基金最新净值数据
+    """
+    try:
+        result = get_latest_nav(fund_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Failed to get latest NAV")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/fund/{fund_id}/subscribe")
 def subscribe_fund(fund_id: str, data: dict = Body(...)):
