@@ -1,11 +1,11 @@
 # FundVal Live
-
-![GitHub stars](https://img.shields.io/github/stars/Ye-Yu-Mo/FundVal-Live?style=social)
-![GitHub views](https://komarev.com/ghpvc/?username=Ye-Yu-Mo&repo=FundVal-Live&color=blue&style=flat-square&label=views)
+项目基于Ye-Yu-Mo/FundVal-Live，感谢原项目作者的贡献。
+![GitHub stars](https://img.shields.io/github/stars/ashurm001/FundVal-Live?style=social)
+![GitHub views](https://komarev.com/ghpvc/?username=ashurm001&repo=FundVal-Live&color=blue&style=flat-square&label=views)
 
 **盘中基金实时估值与逻辑审计系统**
 
-拒绝黑箱，拒绝情绪化叙事。基于透明的持仓穿透 + 实时行情加权计算 + 硬核数学模型，让基金估值回归数学事实。
+
 
 ---
 
@@ -23,28 +23,13 @@
 
 ## 预览
 
-### 资金看板
-![Dashboard](docs/汇总页面.png)
+### 持仓页面增加了 当日净值和收益的数据，能看到当日的预估值和实际的净值、收益
+![Dashboard](docs/持仓.png)
 
-### 多账户管理
-![Multi Account](docs/多账户.png)
+### 修改了手机端的持仓页面，使页面更紧凑
+![Multi Account](docs/手机持仓.png)
 
-### 技术指标审计
-![Technical Indicators](docs/基金详情-技术指标.png)
 
-### AI 深度逻辑报告
-![AI Analysis](docs/AI分析-持仓股明细.png)
-
----
-
-## 加入讨论群组
-
-<div align="center">
-  <img src="docs/讨论群组.jpg" width="300" alt="讨论群组二维码" />
-  <p>扫码加入微信群，交流使用心得、反馈问题、提出建议</p>
-</div>
-
----
 
 ## 快速开始
 
@@ -54,72 +39,13 @@
 
 #### 下载
 
-前往 [Releases](https://github.com/Ye-Yu-Mo/FundVal-Live/releases/latest) 下载最新版本：
+前往 [Releases](https://github.com/ashurm001/FundVal-Live/releases/latest) 下载最新版本：
 
-| 平台 | 文件 | 说明 |
-|------|------|------|
-| **macOS (Apple Silicon)** | `FundVal-Live-*-arm64.dmg` | M1/M2/M3 芯片 |
-| **macOS (Intel)** | `FundVal-Live-*-x64.dmg` | Intel 芯片 |
-| **Windows** | `FundVal-Live-Setup-*.exe` | 64位系统 |
-| **Linux (AppImage)** | `FundVal-Live-*.AppImage` | 通用格式 |
-| **Linux (Debian/Ubuntu)** | `fundval-live_*_amd64.deb` | deb 包 |
 
 #### 安装
 
-**macOS:**
-1. 下载 `.dmg` 文件
-2. 双击打开，拖动到 Applications
-3. 首次打开如提示"无法验证开发者"：
-   - 打开"系统偏好设置" → "安全性与隐私"
-   - 点击"仍要打开"
-4. 如提示"应用已损坏"，在终端执行：
-   ```bash
-   sudo xattr -dr com.apple.quarantine "/Applications/FundVal Live.app"
-   ```
 
-**Windows:**
-1. 下载 `.exe` 文件
-2. 双击安装
-3. 如提示 SmartScreen：点击"更多信息" → "仍要运行"
-
-**Linux:**
-```bash
-# AppImage
-chmod +x FundVal-Live-*.AppImage
-./FundVal-Live-*.AppImage
-
-# Debian/Ubuntu
-sudo dpkg -i fundval-live_*_amd64.deb
-```
-
-#### 数据位置
-
-- **数据库**: `~/.fundval-live/data/fund.db`
-- **配置文件**: `~/.fundval-live/config.json`
-- **日志**: `~/.fundval-live/logs/`
-  - `electron.log` - 应用日志
-  - `backend.log` - 后端日志
-
-#### 修改端口
-
-如果默认端口 `21345` 被占用，可以修改配置文件：
-
-1. 打开配置文件：`~/.fundval-live/config.json`
-2. 修改端口号：
-   ```json
-   {
-     "port": 8080
-   }
-   ```
-3. 重启应用
-
-**配置文件位置**：
-- **macOS/Linux**: `~/.fundval-live/config.json`
-- **Windows**: `C:\Users\<用户名>\.fundval-live\config.json`
-
----
-
-### 方式二：Docker 部署（推荐服务器部署）
+### Docker 部署（推荐服务器部署）
 
 **一键部署，无需配置环境，适合服务器或 NAS**
 
@@ -134,10 +60,10 @@ sudo dpkg -i fundval-live_*_amd64.deb
 
 ```bash
 # 拉取镜像
-docker pull ghcr.io/ye-yu-mo/fundval-live:latest
+docker pull ghcr.io/ashurm001/fundval-live:latest
 
 # 启动服务（无 AI 分析）
-docker run -d -p 21345:21345 ghcr.io/ye-yu-mo/fundval-live:latest
+docker run -d -p 21345:21345 ghcr.io/ashurm001/fundval-live:latest
 
 # 访问 http://localhost:21345
 ```
@@ -152,10 +78,10 @@ docker run -d \
   -v fundval-data:/app/backend/data \
   -e OPENAI_API_KEY=your_api_key \
   -e OPENAI_API_BASE=https://api.openai.com/v1 \
-  ghcr.io/ye-yu-mo/fundval-live:latest
+  ghcr.io/ashurm001/fundval-live:latest
 
 # 或使用 docker-compose
-wget https://raw.githubusercontent.com/Ye-Yu-Mo/FundVal-Live/main/docker-compose.yml
+wget https://raw.githubusercontent.com/ashurm001/FundVal-Live/main/docker-compose.yml
 docker-compose up -d
 ```
 
@@ -163,7 +89,7 @@ docker-compose up -d
 
 ```bash
 # 克隆项目
-git clone https://github.com/Ye-Yu-Mo/FundVal-Live.git
+git clone https://github.com/ashurm001/FundVal-Live.git
 cd FundVal-Live
 
 # （可选）配置环境变量
@@ -354,4 +280,4 @@ flowchart TB
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Ye-Yu-Mo/FundVal-Live&type=date&legend=top-left)](https://www.star-history.com/#Ye-Yu-Mo/FundVal-Live&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=ashurm001/FundVal-Live&type=date&legend=top-left)](https://www.star-history.com/#ashurm001/FundVal-Live&type=date&legend=top-left)
