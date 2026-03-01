@@ -19,8 +19,8 @@ function buildTradeTime(dateStr, cutoff) {
 }
 
 const SORT_OPTIONS = [
-  { label: '预估总值（从高到低）', key: 'est_market_value', direction: 'desc' },
-  { label: '预估总值（从低到高）', key: 'est_market_value', direction: 'asc' },
+  { label: '实际总值（从高到低）', key: 'actual_market_value', direction: 'desc' },
+  { label: '实际总值（从低到高）', key: 'actual_market_value', direction: 'asc' },
   { label: '持有收益（从高到低）', key: 'accumulated_income', direction: 'desc' },
   { label: '持有收益（从低到高）', key: 'accumulated_income', direction: 'asc' },
   { label: '持有收益率（从高到低）', key: 'accumulated_return_rate', direction: 'desc' },
@@ -148,23 +148,13 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
 
   const handleUpdateNav = async () => {
     if (navUpdating) return;
-    if (!confirm('确定手动更新所有持仓基金的净值吗？\n这可能需要几秒钟时间。')) return;
 
     setNavUpdating(true);
     try {
-      const result = await updatePositionsNav(currentAccount);
-      const data = result.data;
-
-      // Build detailed message
-      let msg = data.message || '净值更新完成';
-      if (data.failed && data.failed.length > 0) {
-        msg += `\n\n失败的基金：\n${data.failed.map(f => `${f.code}: ${f.error}`).join('\n')}`;
-      }
-
-      alert(msg);
+      await updatePositionsNav(currentAccount);
       fetchData(); // 刷新持仓数据
     } catch (err) {
-      alert(err.response?.data?.detail || '净值更新失败');
+      console.error('净值更新失败:', err);
     } finally {
       setNavUpdating(false);
     }
@@ -437,15 +427,15 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
 
                     <td className="px-4 py-3 text-right font-mono">
                       <div className="font-mono text-slate-600" title="当日净值">{pos.latest_nav ? pos.latest_nav.toFixed(4) : pos.nav.toFixed(4)}</div>
-                      <div className={`font-medium ${getRateColor(pos.day_income_from_nav || pos.day_income)}`} title="当日收益">
-                          {pos.day_income_from_nav ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
+                      <div className={`font-medium ${getRateColor(pos.day_income_from_nav !== null ? pos.day_income_from_nav : pos.day_income)}`} title="当日收益">
+                          {pos.day_income_from_nav !== null ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
                            pos.day_income ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
                       </div>
                     </td>
 
                     <td className="px-4 py-3 text-right font-mono">
                        <div className="text-slate-800 font-medium">
-                         {(pos.latest_nav ? (pos.latest_nav * pos.shares) : pos.est_market_value).toLocaleString()}
+                         {(pos.actual_market_value || 0).toLocaleString()}
                        </div>
                        <div className={`text-xs ${getRateColor(pos.total_income)}`}>
                           {pos.total_income > 0 ? '+' : ''}{pos.total_income}
@@ -523,8 +513,8 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
                 <div>
                   <div className="text-xs text-slate-400 mb-1">当日净值 | 收益</div>
                   <div className="font-mono text-slate-600">{pos.latest_nav ? pos.latest_nav.toFixed(4) : pos.nav.toFixed(4)}</div>
-                  <div className={`font-medium ${getRateColor(pos.day_income_from_nav || pos.day_income)}`}>
-                    {pos.day_income_from_nav ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
+                  <div className={`font-medium ${getRateColor(pos.day_income_from_nav !== null ? pos.day_income_from_nav : pos.day_income)}`}>
+                    {pos.day_income_from_nav !== null ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
                      pos.day_income ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
                   </div>
                 </div>
@@ -540,7 +530,7 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
                     <div>
                       <div className="text-xs text-slate-400 mb-1">当日总值</div>
                       <div className="text-base text-slate-800">
-                        {(pos.latest_nav ? (pos.latest_nav * pos.shares) : pos.est_market_value).toLocaleString()}
+                        {(pos.actual_market_value || 0).toLocaleString()}
                       </div>
                     </div>
                     <div className="text-right">

@@ -119,15 +119,17 @@ def get_positions(account_id: int = Query(1)):
 def update_positions_nav(account_id: int = Query(1)):
     """
     手动更新持仓基金的净值。
-    拉取所有持仓基金的最新净值并更新 fund_history 表。
-    只有当日净值已公布才算更新成功。
+    首先触发缓存刷新，然后优先从缓存获取最新净值。
+    静默更新，不返回详细消息。
     """
-    import time
     from datetime import datetime
-    from ..services.fund import get_fund_history
+    from ..services.scheduler import update_nav_estimation_cache
 
     try:
-        # Get all holdings for this account
+        # Step 1: Trigger cache refresh first
+        update_nav_estimation_cache()
+        
+        # Step 2: Get all holdings for this account
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT code FROM positions WHERE account_id = ? AND shares > 0", (account_id,))
@@ -135,7 +137,7 @@ def update_positions_nav(account_id: int = Query(1)):
         conn.close()
 
         if not codes:
-            return {"ok": True, "message": "无持仓基金", "updated": 0, "pending": 0, "failed": 0}
+            return {"ok": True, "message": "无持仓基金", "total": 0}
 
         # Get today's date
         today = datetime.now().strftime("%Y-%m-%d")
@@ -143,43 +145,33 @@ def update_positions_nav(account_id: int = Query(1)):
         # Update NAV for each fund
         updated = 0  # 当日净值已更新
         pending = 0  # 当日净值未公布
-        failed = []  # 拉取失败
 
         for code in codes:
             try:
-                history = get_fund_history(code, limit=5)
-                if history:
-                    # Check if latest NAV is today's
-                    latest_date = history[-1]["date"]
-                    if latest_date == today:
-                        updated += 1
-                    else:
-                        pending += 1
+                # Get from cache
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT published_nav
+                    FROM fund_nav_estimation
+                    WHERE code = ? AND date = ?
+                """, (code, today))
+                cache_row = cursor.fetchone()
+                conn.close()
+
+                if cache_row and cache_row["published_nav"] is not None:
+                    updated += 1
                 else:
-                    failed.append({"code": code, "error": "无历史数据"})
-                time.sleep(0.3)  # Avoid API rate limiting
+                    pending += 1
             except Exception as e:
-                failed.append({"code": code, "error": str(e)})
-
-        # Build message
-        msg_parts = []
-        if updated > 0:
-            msg_parts.append(f"{updated} 个已更新当日净值")
-        if pending > 0:
-            msg_parts.append(f"{pending} 个净值未公布")
-        if failed:
-            msg_parts.append(f"{len(failed)} 个拉取失败")
-
-        message = "、".join(msg_parts) if msg_parts else "无数据"
+                print(f"Error updating NAV for {code}: {e}")
 
         return {
             "ok": True,
-            "message": message,
+            "message": f"已更新 {updated} 个，待公布 {pending} 个",
             "updated": updated,
             "pending": pending,
-            "failed_count": len(failed),
-            "total": len(codes),
-            "failed": failed if failed else None
+            "total": len(codes)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

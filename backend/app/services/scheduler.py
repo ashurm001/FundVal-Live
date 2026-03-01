@@ -190,6 +190,182 @@ def update_holdings_nav():
     if updated > 0 or pending > 0:
         logger.info(f"NAV update: {updated} updated, {pending} pending (total {len(codes)})")
 
+def check_all_navs_published():
+    """
+    Check if all holdings' NAVs have been published for today.
+    Returns True if all funds have published_nav > 0 in today's cache.
+    """
+    from datetime import datetime
+    
+    now_cst = datetime.now(CST)
+    today_str = now_cst.strftime("%Y-%m-%d")
+    
+    # Get all holdings
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT code FROM positions WHERE shares > 0")
+    codes = [row["code"] for row in cursor.fetchall()]
+    conn.close()
+    
+    if not codes:
+        return True
+    
+    # Check if all funds have published_nav in today's cache
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Count funds with published_nav > 0
+    placeholders = ','.join(['?' for _ in codes])
+    cursor.execute(f"""
+        SELECT COUNT(*) as cnt
+        FROM fund_nav_estimation
+        WHERE code IN ({placeholders})
+        AND date = ?
+        AND published_nav IS NOT NULL
+        AND published_nav > 0
+    """, codes + [today_str])
+    
+    published_count = cursor.fetchone()["cnt"]
+    conn.close()
+    
+    # All funds have published NAV
+    return published_count == len(codes)
+
+def update_nav_estimation_cache():
+    """
+    Update NAV estimation cache from fund_value_estimation_em API.
+    Fetches all funds' real-time NAV estimation and published NAV.
+    
+    Refresh strategy:
+    - 09:00-18:30: no refresh (trading hours and waiting for NAV publication)
+    - 18:30-24:00: every 10 minutes for published NAV data, STOP when all NAVs published
+    - 00:00-09:00: no refresh (minimal refresh)
+    
+    This reduces API calls significantly while ensuring data freshness when needed.
+    Note: get_combined_valuation has no call rate limit - only cache update is limited.
+    """
+    now_cst = datetime.now(CST)
+    today = now_cst.date()
+    today_str = today.strftime("%Y-%m-%d")
+    current_hour = now_cst.hour
+
+    # Check if trading day
+    if not is_trading_day(today):
+        return
+
+    # Fetch all fund types' estimation data
+    fund_types = ['全部', '股票型', '混合型', '债券型', '指数型', 'QDII', 'ETF联接', 'LOF', '场内交易基金']
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    total_updated = 0
+
+    for fund_type in fund_types:
+        try:
+            df = ak.fund_value_estimation_em(symbol=fund_type)
+            if df is None or df.empty:
+                continue
+
+            # Parse column names dynamically (they contain date)
+            columns = df.columns.tolist()
+            estimate_col = None
+            estimate_rate_col = None
+            published_nav_col = None
+            published_rate_col = None
+            deviation_col = None
+            previous_nav_col = None
+
+            for col in columns:
+                if '估算数据-估算值' in col:
+                    estimate_col = col
+                elif '估算数据-估算增长率' in col:
+                    estimate_rate_col = col
+                elif '公布数据-单位净值' in col:
+                    published_nav_col = col
+                elif '公布数据-日增长率' in col:
+                    published_rate_col = col
+                elif '估算偏差' in col:
+                    deviation_col = col
+                elif '单位净值' in col and '公布数据' not in col and '估算数据' not in col:
+                    previous_nav_col = col
+
+            if not all([estimate_col, published_nav_col, previous_nav_col]):
+                continue
+
+            # Update database
+            for _, row in df.iterrows():
+                code = row.get('基金代码')
+                if not code:
+                    continue
+
+                # Parse numeric values
+                estimate = row.get(estimate_col)
+                estimate_rate = row.get(estimate_rate_col)
+                published_nav = row.get(published_nav_col)
+                published_rate = row.get(published_rate_col)
+                deviation = row.get(deviation_col)
+                previous_nav = row.get(previous_nav_col)
+
+                # Parse rate strings (e.g., "3.28%" -> 3.28)
+                def parse_rate(val):
+                    if val is None or val == '' or val == '---':
+                        return None
+                    if isinstance(val, str):
+                        try:
+                            return float(val.replace('%', ''))
+                        except:
+                            return None
+                    try:
+                        return float(val)
+                    except:
+                        return None
+
+                estimate_rate = parse_rate(estimate_rate)
+                published_rate = parse_rate(published_rate)
+                deviation = parse_rate(deviation)
+
+                # Parse numeric values
+                def parse_float(val):
+                    if val is None or val == '' or val == '---':
+                        return None
+                    try:
+                        return float(val)
+                    except:
+                        return None
+
+                estimate = parse_float(estimate)
+                published_nav = parse_float(published_nav)
+                previous_nav = parse_float(previous_nav)
+
+                # Insert or update
+                cursor.execute("""
+                    INSERT OR REPLACE INTO fund_nav_estimation
+                    (code, date, estimate, estimate_rate, published_nav, published_rate, deviation, previous_nav, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (
+                    code,
+                    today_str,
+                    estimate,
+                    estimate_rate,
+                    published_nav,
+                    published_rate,
+                    deviation,
+                    previous_nav
+                ))
+
+                total_updated += 1
+
+            time.sleep(0.5)  # Avoid API rate limiting between types
+
+        except Exception as e:
+            logger.error(f"Failed to update estimation cache for type '{fund_type}': {e}")
+
+    conn.commit()
+    conn.close()
+
+    if total_updated > 0:
+        logger.info(f"NAV estimation cache updated: {total_updated} funds at {now_cst.strftime('%H:%M')}")
+
 def check_subscriptions():
     """
     Check all subscriptions and send alerts (Volatility & Digest).
@@ -289,6 +465,7 @@ def start_scheduler():
         # 2. Main loop
         last_cleanup_date = None
         last_nav_update_hour = None
+        last_estimation_update_time = None
 
         while True:
             try:
@@ -308,6 +485,41 @@ def start_scheduler():
 
                 # Intraday data collection (trading hours only)
                 collect_intraday_snapshots()
+
+                # NAV estimation cache update
+                # Optimized refresh strategy to reduce API calls:
+                # - 09:00-18:30: no refresh (trading hours and waiting for NAV publication)
+                # - 18:30-24:00: every 10 minutes for published NAV data, STOP when all NAVs published
+                # - 00:00-09:00: no refresh (minimal refresh)
+                
+                # Check if all NAVs have been published
+                all_published = check_all_navs_published()
+                
+                if last_estimation_update_time is None:
+                    update_nav_estimation_cache()
+                    last_estimation_update_time = now_cst
+                else:
+                    current_hour = now_cst.hour
+                    current_minute = now_cst.minute
+                    
+                    # Determine refresh interval based on time of day
+                    if current_hour < 18 or (current_hour == 18 and current_minute < 30):
+                        # Trading hours and waiting for NAV publication: skip refresh
+                        interval_seconds = float('inf')
+                    elif 18 <= current_hour < 24:
+                        # After NAV publication: refresh every 10 minutes
+                        # BUT stop if all NAVs have been published
+                        if all_published:
+                            interval_seconds = float('inf')
+                        else:
+                            interval_seconds = 600  # 10 minutes
+                    else:
+                        # Early morning: no refresh
+                        interval_seconds = float('inf')
+
+                    if interval_seconds != float('inf') and (now_cst - last_estimation_update_time).total_seconds() >= interval_seconds:
+                        update_nav_estimation_cache()
+                        last_estimation_update_time = now_cst
 
                 # 待确认加仓/减仓：用当日已公布净值更新持仓
                 n = process_pending_transactions()

@@ -19,7 +19,8 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
     conn.close()
 
     positions = []
-    total_market_value = 0.0
+    total_market_value = 0.0  # 基于预估净值的市值
+    total_actual_market_value = 0.0  # 基于实际净值的市值
     total_cost = 0.0
     total_day_income = 0.0
 
@@ -43,7 +44,6 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                 # Default safe values
                 data = future.result() or {}
                 name = data.get("name")
-                latest_nav = float(data.get("latest_nav", 0.0))
                 fund_type = None
 
                 # If name is missing, fetch from database
@@ -63,23 +63,20 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                 if not fund_type:
                     fund_type = get_fund_type(code, name)
 
-                # Check if today's NAV is available
-                from datetime import datetime
-                today_str = datetime.now().strftime("%Y-%m-%d")
-                conn_temp = get_db_connection()
-                cursor_temp = conn_temp.cursor()
-                cursor_temp.execute(
-                    "SELECT date FROM fund_history WHERE code = ? ORDER BY date DESC LIMIT 1",
-                    (code,)
-                )
-                latest_nav_row = cursor_temp.fetchone()
-                conn_temp.close()
-                nav_updated_today = latest_nav_row and latest_nav_row["date"] == today_str
-
                 nav = float(data.get("nav", 0.0))
+                published_nav = float(data.get("published_nav", 0.0))
                 estimate = float(data.get("estimate", 0.0))
+                
+                # Check if today's NAV is available
+                # nav_updated_today is True if published_nav > 0 (today's published NAV is available)
+                nav_updated_today = published_nav > 0
+                
+                # Use published_nav as latest_nav if available (today's published NAV)
+                # Otherwise fall back to latest_nav from fund_history (yesterday's NAV)
+                latest_nav = published_nav if published_nav > 0 else float(data.get("latest_nav", 0.0))
+                
                 # If estimate is 0 (e.g. market closed or error), use NAV
-                current_price = estimate if estimate > 0 else nav
+                current_price = estimate if estimate > 0 else (published_nav if published_nav > 0 else nav)
                 
                 # Calculations
                 cost = float(row["cost"])
@@ -87,6 +84,7 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                 
                 # 1. Base Metrics
                 nav_market_value = nav * shares
+                published_nav_market_value = published_nav * shares
                 cost_basis = cost * shares
                 
                 # 2. Estimate & Reliability Check
@@ -118,10 +116,19 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                     day_income = 0.0
                     est_market_value = nav_market_value # Fallback to confirmed value
                 
-                # Calculate day income from latest NAV (actual daily change)
-                day_income_from_nav = (latest_nav - nav) * shares if latest_nav > 0 else 0.0
+                # Calculate day income from published NAV (actual daily change)
+                # If published_nav is available (today's NAV), use it
+                # Otherwise, fall back to 0 (no actual change yet)
+                if published_nav > 0:
+                    day_income_from_nav = (published_nav - nav) * shares
+                else:
+                    day_income_from_nav = 0.0
+                
+                # Calculate actual market value based on latest_nav (published_nav if available, else yesterday's nav)
+                actual_market_value = latest_nav * shares if latest_nav > 0 else nav_market_value
                 
                 # C. Total Income (Based on latest NAV)
+                # latest_nav is now published_nav (today's NAV) if available
                 total_income = (latest_nav - cost) * shares if latest_nav > 0 else (nav - cost) * shares
                 total_return_rate = (total_income / cost_basis * 100) if cost_basis > 0 else 0.0
                 
@@ -143,6 +150,7 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                     "cost_basis": round(cost_basis, 2),
                     "nav_market_value": round(nav_market_value, 2),
                     "est_market_value": round(est_market_value, 2),
+                    "actual_market_value": round(actual_market_value, 2),  # 基于实际净值的市值
                     
                     # PnL
                     "accumulated_income": round(accumulated_income, 2),
@@ -158,6 +166,7 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                 })
                 
                 total_market_value += est_market_value
+                total_actual_market_value += actual_market_value
                 total_day_income += day_income
                 total_cost += cost_basis
                 # accumulated income sum not strictly needed for top card but good to have?
@@ -182,18 +191,18 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                     "update_time": "--"
                 })
 
-    total_income = total_market_value - total_cost
+    total_income = total_actual_market_value - total_cost
     total_return_rate = (total_income / total_cost * 100) if total_cost > 0 else 0.0
 
     return {
         "summary": {
-            "total_market_value": round(total_market_value, 2), # Projected
+            "total_market_value": round(total_actual_market_value, 2), # 实际总资产（基于实际净值）
             "total_cost": round(total_cost, 2),
             "total_day_income": round(total_day_income, 2),
             "total_income": round(total_income, 2),
             "total_return_rate": round(total_return_rate, 2)
         },
-        "positions": sorted(positions, key=lambda x: x["est_market_value"], reverse=True)
+        "positions": sorted(positions, key=lambda x: x["actual_market_value"], reverse=True)
     }
 
 def upsert_position(account_id: int, code: str, cost: float, shares: float):

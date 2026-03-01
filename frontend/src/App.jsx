@@ -20,7 +20,7 @@ const APP_VERSION = packageJson.version;
 
 export default function App() {
   // --- State ---
-  const [currentView, setCurrentView] = useState('list'); // 'list' | 'detail' | 'account' | 'settings'
+  const [currentView, setCurrentView] = useState('account'); // 'list' | 'detail' | 'account' | 'settings'
   const [currentAccount, setCurrentAccount] = useState(() => {
     const saved = localStorage.getItem('fundval_current_account');
     return saved ? parseInt(saved) : 1;

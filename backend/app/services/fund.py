@@ -111,8 +111,58 @@ def get_sina_valuation(code: str) -> Dict[str, Any]:
 
 def get_combined_valuation(code: str) -> Dict[str, Any]:
     """
-    Try Eastmoney first, fallback to Sina.
+    Try cache first, then Eastmoney, fallback to Sina.
+    No call rate limit - only cache update is limited by scheduler.
     """
+    from datetime import datetime
+
+    # 1. Try to get from cache first
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT estimate, estimate_rate, published_nav, published_rate, deviation, previous_nav, updated_at
+        FROM fund_nav_estimation
+        WHERE code = ? AND date = ?
+    """, (code, today_str))
+    cache_row = cursor.fetchone()
+    conn.close()
+
+    if cache_row:
+        # Check if cache is for today and has valid data
+        updated_at = cache_row["updated_at"]
+        try:
+            # For today's data, always use it regardless of time
+            # Because it contains today's published NAV and estimation
+            data = {}
+            data["estimate"] = float(cache_row["estimate"]) if cache_row["estimate"] is not None else 0.0
+            data["est_rate"] = float(cache_row["estimate_rate"]) if cache_row["estimate_rate"] is not None else 0.0
+            data["nav"] = float(cache_row["previous_nav"]) if cache_row["previous_nav"] is not None else 0.0  # 使用前一日净值
+            data["published_nav"] = float(cache_row["published_nav"]) if cache_row["published_nav"] is not None else 0.0  # 今日公布净值
+            data["estRate"] = data["est_rate"]
+            data["time"] = updated_at
+
+            # Get fund name
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM funds WHERE code = ?", (code,))
+            name_row = cursor.fetchone()
+            conn.close()
+            if name_row:
+                data["name"] = name_row["name"]
+
+            # Use published_nav as latest_nav if available, otherwise use previous_nav (yesterday's NAV)
+            if data["published_nav"] > 0:
+                data["latest_nav"] = data["published_nav"]
+            else:
+                # Fallback to previous_nav (yesterday's NAV) if no published_nav
+                data["latest_nav"] = data["nav"]
+
+            return data
+        except Exception as e:
+            print(f"Error parsing cache data for {code}: {e}")
+
+    # 2. Fallback to API
     data = get_eastmoney_valuation(code)
     if not data or data.get("estimate") == 0.0:
         # Fallback to Sina
@@ -125,9 +175,12 @@ def get_combined_valuation(code: str) -> Dict[str, Any]:
     latest_nav_data = get_latest_nav(code)
     if latest_nav_data:
         data["latest_nav"] = latest_nav_data.get("latest_nav")
+        # Add published_nav field for consistency with cache mode
+        data["published_nav"] = latest_nav_data.get("latest_nav")
     else:
         # Fallback to previous day's NAV if latest NAV not available
         data["latest_nav"] = data.get("nav")
+        data["published_nav"] = data.get("nav")
     
     return data
 

@@ -55,7 +55,7 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
     }
 
     if (!dataMap[type]) dataMap[type] = 0;
-    dataMap[type] += p.market_value || p.est_market_value;
+    dataMap[type] += p.actual_market_value || p.market_value || p.est_market_value || 0;
   });
 
   const data = Object.keys(dataMap).map(key => ({
@@ -81,16 +81,16 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
         {/* 左侧：统计数据 */}
         <div className="w-full md:w-1/2 grid grid-cols-2 gap-2">
           <div className="bg-slate-50 p-2 rounded-lg">
-            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">预估总资产</div>
+            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">实际总资产</div>
             <div className="text-lg font-bold text-slate-800">
               ¥{(summary?.total_market_value || 0).toLocaleString()}
             </div>
           </div>
 
           <div className="bg-slate-50 p-2 rounded-lg">
-            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">成本总额</div>
-            <div className="text-lg font-bold text-slate-600">
-              ¥{(summary?.total_cost || 0).toLocaleString()}
+            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">累计盈利</div>
+            <div className={`text-lg font-bold ${getRateColor(summary?.total_income || 0)}`}>
+              {(summary?.total_income || 0) > 0 ? '+' : ''}¥{(summary?.total_income || 0).toLocaleString()}
             </div>
           </div>
 

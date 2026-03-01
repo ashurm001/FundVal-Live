@@ -54,6 +54,15 @@ export const FundList = ({ watchlist, setWatchlist, onSelectFund, onSubscribe, o
 
         {/* Controls */}
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {/* Sort Toggle - Now placed before category filter */}
+            <button 
+                onClick={() => setSortType(prev => prev === 'rate_desc' ? 'rate_asc' : 'rate_desc')}
+                className="flex items-center gap-1 bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-lg text-xs hover:bg-slate-50 transition-colors whitespace-nowrap"
+            >
+                <ArrowUpDown className="w-3 h-3" />
+                {sortType === 'default' ? '排序' : sortType === 'rate_desc' ? '涨幅 ↓' : '涨幅 ↑'}
+            </button>
+
             {/* Sector Filter */}
             <div className="flex bg-white border border-slate-200 rounded-lg p-1">
                 {categories.map(s => (
@@ -70,15 +79,6 @@ export const FundList = ({ watchlist, setWatchlist, onSelectFund, onSubscribe, o
                     </button>
                 ))}
             </div>
-
-            {/* Sort Toggle */}
-            <button 
-                onClick={() => setSortType(prev => prev === 'rate_desc' ? 'rate_asc' : 'rate_desc')}
-                className="flex items-center gap-1 bg-white border border-slate-200 text-slate-600 px-3 py-1 rounded-lg text-xs hover:bg-slate-50 transition-colors whitespace-nowrap"
-            >
-                <ArrowUpDown className="w-3 h-3" />
-                {sortType === 'default' ? '排序' : sortType === 'rate_desc' ? '涨幅 ↓' : '涨幅 ↑'}
-            </button>
         </div>
       </div>
 

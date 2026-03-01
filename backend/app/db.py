@@ -148,6 +148,25 @@ def init_db():
         )
     """)
 
+    # Fund NAV estimation cache table - store real-time NAV estimation data
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS fund_nav_estimation (
+            code TEXT NOT NULL,
+            date TEXT NOT NULL,
+            estimate REAL,
+            estimate_rate REAL,
+            published_nav REAL,
+            published_rate REAL,
+            deviation REAL,
+            previous_nav REAL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (code, date)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_estimation_code ON fund_nav_estimation(code);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_estimation_date ON fund_nav_estimation(date);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_estimation_updated ON fund_nav_estimation(updated_at);")
+
     # Migration: Drop old incompatible tables
     if current_version < 1:
         logger.info("Running migration: dropping old incompatible tables")
