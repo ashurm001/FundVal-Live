@@ -167,6 +167,41 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_estimation_date ON fund_nav_estimation(date);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_estimation_updated ON fund_nav_estimation(updated_at);")
 
+    # AI analysis history table - store AI analysis results for historical review
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_analysis_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fund_code TEXT NOT NULL,
+            fund_name TEXT,
+            analysis_date TEXT NOT NULL,
+            analysis_time TEXT NOT NULL,
+            risk_level TEXT,
+            status TEXT,
+            indicators_desc TEXT,
+            analysis_report TEXT,
+            summary TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_analysis_history_code ON ai_analysis_history(fund_code);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_analysis_history_date ON ai_analysis_history(analysis_date);")
+
+    # User notes table - store user notes for funds
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fund_code TEXT NOT NULL,
+            fund_name TEXT,
+            note_date TEXT NOT NULL,
+            note_time TEXT NOT NULL,
+            note_content TEXT NOT NULL,
+            note_color TEXT DEFAULT '#10b981',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_notes_code ON user_notes(fund_code);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_notes_date ON user_notes(note_date);")
+
     # Migration: Drop old incompatible tables
     if current_version < 1:
         logger.info("Running migration: dropping old incompatible tables")
@@ -284,6 +319,31 @@ def init_db():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_transactions_confirm_date ON transactions(confirm_date)")
 
         cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (2)")
+
+    # Migration: Messages table for storing portfolio analysis and other messages
+    if current_version < 3:
+        logger.info("Running migration: adding messages table")
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                msg_type TEXT NOT NULL DEFAULT 'portfolio_analysis',
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                summary TEXT,
+                score INTEGER,
+                risk_level TEXT,
+                fund_count INTEGER,
+                total_value REAL,
+                read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(msg_type);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_read ON messages(read);")
+
+        cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (3)")
 
     conn.commit()
     conn.close()

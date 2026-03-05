@@ -5,28 +5,31 @@ import {
   Wallet,
   LayoutGrid,
   Settings as SettingsIcon,
-  Users
+  Users,
+  Bell
 } from 'lucide-react';
 import { FundList } from './pages/FundList';
 import { FundDetail } from './pages/FundDetail';
 import Account from './pages/Account';
 import Settings from './pages/Settings';
+import Messages from './pages/Messages';
 import { SubscribeModal } from './components/SubscribeModal';
 import { AccountModal } from './components/AccountModal';
-import { searchFunds, getFundDetail, getAccountPositions, subscribeFund, getAccounts } from './services/api';
+import { searchFunds, getFundDetail, getAccountPositions, subscribeFund, getAccounts, getUnreadMessageCount } from './services/api';
 import packageJson from '../../package.json';
 
 const APP_VERSION = packageJson.version;
 
 export default function App() {
   // --- State ---
-  const [currentView, setCurrentView] = useState('account'); // 'list' | 'detail' | 'account' | 'settings'
+  const [currentView, setCurrentView] = useState('account'); // 'list' | 'detail' | 'account' | 'settings' | 'messages'
   const [currentAccount, setCurrentAccount] = useState(() => {
     const saved = localStorage.getItem('fundval_current_account');
     return saved ? parseInt(saved) : 1;
   });
   const [accounts, setAccounts] = useState([]);
   const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   // Initialize from localStorage
   const [watchlist, setWatchlist] = useState(() => {
@@ -73,8 +76,19 @@ export default function App() {
     setAccounts(accs);
   };
 
+  // Load unread message count
+  const loadUnreadCount = async () => {
+    const data = await getUnreadMessageCount('portfolio_analysis');
+    setUnreadCount(data.count || 0);
+  };
+
   useEffect(() => {
     loadAccounts();
+    loadUnreadCount();
+    
+    // Refresh unread count every 30 seconds
+    const interval = setInterval(loadUnreadCount, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Fetch account codes to prevent duplicates
@@ -281,6 +295,17 @@ export default function App() {
                    >
                       <SettingsIcon className="w-6 h-6" />
                    </button>
+                   <button
+                      onClick={() => setCurrentView('messages')}
+                      className={`p-2 rounded-lg transition-colors relative ${currentView === 'messages' ? 'bg-blue-100 text-blue-700' : 'hover:bg-slate-100 text-slate-500'}`}
+                   >
+                      <Bell className="w-6 h-6" />
+                      {unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                   </button>
                 </div>
               )}
 
@@ -308,7 +333,7 @@ export default function App() {
 
               <div>
                 <h1 className="text-lg font-bold text-slate-800 leading-tight">
-                  {currentView === 'detail' ? '基金详情' : (currentView === 'account' ? '我的账户' : (currentView === 'settings' ? '设置' : 'FundVal Live'))}
+                  {currentView === 'detail' ? '基金详情' : (currentView === 'account' ? '我的账户' : (currentView === 'settings' ? '设置' : (currentView === 'messages' ? '消息中心' : 'FundVal Live')))}
                 </h1>
               </div>
             </div>
@@ -385,6 +410,10 @@ export default function App() {
 
         {currentView === 'settings' && (
           <Settings />
+        )}
+
+        {currentView === 'messages' && (
+          <Messages />
         )}
 
         {currentView === 'detail' && (

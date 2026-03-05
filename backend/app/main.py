@@ -7,7 +7,7 @@ import os
 import sys
 import json
 
-from .routers import funds, ai, account, settings
+from .routers import funds, ai, account, settings, messages
 from .db import init_db
 from .services.scheduler import start_scheduler
 
@@ -58,6 +58,7 @@ app.include_router(funds.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(account.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(messages.router, prefix="/api")
 
 # Project info endpoint
 @app.get("/api/info")

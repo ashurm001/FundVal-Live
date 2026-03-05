@@ -75,7 +75,7 @@ export const FundDetail = ({ fund, onSubscribe }) => {
           </div>
 
           {chartType === 'history' ? (
-            <HistoryChart fundId={fund.id} />
+            <HistoryChart fundId={fund.id} fundName={fund.name} />
           ) : (
             <IntradayChart fundId={fund.id} />
           )}

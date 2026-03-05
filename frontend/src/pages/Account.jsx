@@ -3,6 +3,7 @@ import { Plus, X, Edit2, Trash2, RefreshCw, ArrowUpDown, ChevronDown, TrendingUp
 import { getAccountPositions, updatePosition, deletePosition, addPositionTrade, reducePositionTrade, getTransactions, updatePositionsNav, getFundLatestNav } from '../services/api';
 import { getRateColor } from '../components/StatCard';
 import { PortfolioChart } from '../components/PortfolioChart';
+import { PortfolioAiAnalysis } from '../components/PortfolioAiAnalysis';
 
 function formatDateYMD(d) {
   const y = d.getFullYear();
@@ -318,6 +319,11 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
         </div>
       )}
 
+      {/* AI 持仓分析 */}
+      <div className="w-full">
+        <PortfolioAiAnalysis positions={positions} summary={summary} />
+      </div>
+
       {/* 2. Actions */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <h2 className="text-xl font-bold text-slate-800">持仓明细</h2>
@@ -427,9 +433,9 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
 
                     <td className="px-4 py-3 text-right font-mono">
                       <div className="font-mono text-slate-600" title="当日净值">{pos.latest_nav ? pos.latest_nav.toFixed(4) : pos.nav.toFixed(4)}</div>
-                      <div className={`font-medium ${getRateColor(pos.day_income_from_nav !== null ? pos.day_income_from_nav : pos.day_income)}`} title="当日收益">
-                          {pos.day_income_from_nav !== null ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
-                           pos.day_income ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
+                      <div className={`font-medium ${getRateColor(pos.day_income_from_nav || 0)}`} title="当日收益">
+                          {pos.day_income_from_nav !== undefined && pos.day_income_from_nav !== null ? 
+                            (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : '--'}
                       </div>
                     </td>
 
@@ -513,9 +519,9 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
                 <div>
                   <div className="text-xs text-slate-400 mb-1">当日净值 | 收益</div>
                   <div className="font-mono text-slate-600">{pos.latest_nav ? pos.latest_nav.toFixed(4) : pos.nav.toFixed(4)}</div>
-                  <div className={`font-medium ${getRateColor(pos.day_income_from_nav !== null ? pos.day_income_from_nav : pos.day_income)}`}>
-                    {pos.day_income_from_nav !== null ? (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : 
-                     pos.day_income ? (pos.day_income > 0 ? '+' : '') + pos.day_income : '--'}
+                  <div className={`font-medium ${getRateColor(pos.day_income_from_nav || 0)}`}>
+                    {pos.day_income_from_nav !== undefined && pos.day_income_from_nav !== null ? 
+                      (pos.day_income_from_nav > 0 ? '+' : '') + pos.day_income_from_nav.toFixed(2) : '--'}
                   </div>
                 </div>
 

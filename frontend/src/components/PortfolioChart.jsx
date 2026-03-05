@@ -96,8 +96,8 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
 
           <div className="bg-slate-50 p-2 rounded-lg">
             <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">当日实际盈亏</div>
-            <div className={`text-lg font-bold ${getRateColor(positions.reduce((total, pos) => total + (pos.day_income_from_nav || pos.day_income || 0), 0))}`}>
-              {(positions.reduce((total, pos) => total + (pos.day_income_from_nav || pos.day_income || 0), 0)) > 0 ? '+' : ''}¥{positions.reduce((total, pos) => total + (pos.day_income_from_nav || pos.day_income || 0), 0).toLocaleString()}
+            <div className={`text-lg font-bold ${getRateColor(positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0))}`}>
+              {(positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0)) > 0 ? '+' : ''}¥{positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0).toLocaleString()}
             </div>
           </div>
 
