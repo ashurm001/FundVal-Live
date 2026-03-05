@@ -45,6 +45,12 @@ deploy-server.sh
 coverage/
 .nyc_output/
 
+# 检查和调试脚本
+backend/check_*.py
+backend/fix_*.py
+backend/test_*.py
+backend/trigger_*.py
+
 # 其他临时文件
 temp-deploy/
 fundval-deploy.zip
