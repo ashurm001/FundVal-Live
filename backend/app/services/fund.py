@@ -27,9 +27,8 @@ def get_fund_type(code: str, name: str) -> str:
     Returns:
         Fund type string
     """
-    conn = None
+    conn = get_db_connection()
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT type FROM funds WHERE code = ?", (code,))
         row = cursor.fetchone()
@@ -143,11 +142,11 @@ def get_combined_valuation(code: str) -> Dict[str, Any]:
             data["time"] = updated_at
 
             # Get fund name
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM funds WHERE code = ?", (code,))
-            name_row = cursor.fetchone()
-            conn.close()
+            conn_temp = get_db_connection()
+            cursor_temp = conn_temp.cursor()
+            cursor_temp.execute("SELECT name FROM funds WHERE code = ?", (code,))
+            name_row = cursor_temp.fetchone()
+            conn_temp.close()
             if name_row:
                 data["name"] = name_row["name"]
 
@@ -161,6 +160,7 @@ def get_combined_valuation(code: str) -> Dict[str, Any]:
             return data
         except Exception as e:
             print(f"Error parsing cache data for {code}: {e}")
+            return {}
 
     # 2. Fallback to API
     data = get_eastmoney_valuation(code)

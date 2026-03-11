@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Save, AlertCircle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { Save, AlertCircle, CheckCircle2, Database, Download, Upload } from 'lucide-react';
+import { getSettings, updateSettings } from '../services/api';
+
+const DataTransfer = lazy(() => import('../components/DataTransfer'));
 
 export default function Settings() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [showDataTransfer, setShowDataTransfer] = useState(false);
 
   const [settings, setSettings] = useState({
     OPENAI_API_KEY: '',
@@ -20,24 +24,24 @@ export default function Settings() {
 
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     setLoading(true);
+    setMessage({ type: '', text: '' });
+    
     try {
-      const response = await fetch('/api/settings');
-      if (!response.ok) throw new Error('Failed to load settings');
-      const data = await response.json();
-
+      const data = await getSettings();
       setSettings(data.settings || {});
     } catch (error) {
-      setMessage({ type: 'error', text: error.message });
+      console.error('Load settings error:', error);
+      setMessage({ type: 'error', text: error.message || '加载设置失败，请检查网络连接' });
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -91,28 +95,17 @@ export default function Settings() {
         Object.entries(settings).filter(([key, value]) => value !== '***')
       );
 
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: filteredSettings })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-
-        // 如果后端返回字段级错误
-        if (errorData.detail && errorData.detail.errors) {
-          setErrors(errorData.detail.errors);
-          setMessage({ type: 'error', text: '请修正表单错误' });
-        } else {
-          setMessage({ type: 'error', text: '保存失败' });
-        }
-        return;
-      }
-
+      await updateSettings(filteredSettings);
       setMessage({ type: 'success', text: '设置已保存' });
     } catch (error) {
-      setMessage({ type: 'error', text: '网络错误' });
+      console.error('Save settings error:', error);
+      // 如果后端返回字段级错误
+      if (error.response?.data?.detail?.errors) {
+        setErrors(error.response.data.detail.errors);
+        setMessage({ type: 'error', text: '请修正表单错误' });
+      } else {
+        setMessage({ type: 'error', text: error.message || '保存失败' });
+      }
     } finally {
       setSaving(false);
     }
@@ -127,16 +120,18 @@ export default function Settings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">加载设置中...</div>
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <div className="flex items-center gap-2 text-gray-500">
+          <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+          加载设置中...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">设置</h1>
+    <div className="space-y-6">
+      <div className="flex justify-end">
         <button
           onClick={handleSave}
           disabled={saving}
@@ -323,6 +318,59 @@ export default function Settings() {
           </p>
         </div>
       </div>
+
+      {/* Data Backup & Restore */}
+      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <h2 className="text-xl font-semibold text-gray-900">数据备份与恢复</h2>
+        <p className="text-sm text-gray-500">
+          导出您的持仓数据进行备份，或从备份文件恢复数据。
+        </p>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setShowDataTransfer(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Database className="w-4 h-4" />
+            打开数据管理
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="p-4 bg-slate-50 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Download className="w-5 h-5 text-green-600" />
+              <h3 className="font-medium text-slate-800">导出数据</h3>
+            </div>
+            <p className="text-sm text-slate-500">
+              支持 JSON 和 CSV 两种格式。JSON 包含完整的持仓、交易记录和数字货币数据；CSV 仅包含基金持仓。
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Upload className="w-5 h-5 text-blue-600" />
+              <h3 className="font-medium text-slate-800">导入数据</h3>
+            </div>
+            <p className="text-sm text-slate-500">
+              支持从 JSON 或 CSV 文件恢复数据。提供替换、合并、跳过三种合并策略。
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Data Transfer Modal */}
+      {showDataTransfer && (
+        <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div className="bg-white p-6 rounded-lg">加载中...</div></div>}>
+          <DataTransfer
+            onClose={() => setShowDataTransfer(false)}
+            onSuccess={() => {
+              setMessage({ type: 'success', text: '数据导入成功，页面将刷新' });
+              setTimeout(() => window.location.reload(), 1500);
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

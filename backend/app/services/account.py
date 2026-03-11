@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 
 from ..db import get_db_connection
 from .fund import get_combined_valuation, get_fund_type
@@ -19,30 +19,25 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
     conn.close()
 
     positions = []
-    total_market_value = 0.0  # 基于预估净值的市值
-    total_actual_market_value = 0.0  # 基于实际净值的市值
+    total_market_value = 0.0
+    total_actual_market_value = 0.0
     total_cost = 0.0
     total_day_income = 0.0
 
-    # 1. Fetch real-time data in parallel
-    # We map code -> row data first
     position_map = {row["code"]: row for row in rows}
     
     with ThreadPoolExecutor(max_workers=10) as executor:
-        # Submit tasks
         future_to_code = {
             executor.submit(get_combined_valuation, code): code 
             for code in position_map.keys()
         }
         
-        # Process results
         for future in as_completed(future_to_code):
             code = future_to_code[future]
             row = position_map[code]
             
             try:
-                # Default safe values
-                data = future.result() or {}
+                data = future.result(timeout=3) or {}
                 name = data.get("name")
                 fund_type = None
 
@@ -172,6 +167,24 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                 # accumulated income sum not strictly needed for top card but good to have?
                 # Let's keep total_income as the projected total.
 
+            except TimeoutError:
+                logger.warning(f"Timeout fetching valuation for {code}")
+                positions.append({
+                    "code": code,
+                    "name": "Timeout",
+                    "cost": float(row["cost"]),
+                    "shares": float(row["shares"]),
+                    "nav": 0.0,
+                    "estimate": 0.0,
+                    "est_market_value": 0.0,
+                    "day_income": 0.0,
+                    "total_income": 0.0,
+                    "total_return_rate": 0.0,
+                    "accumulated_income": 0.0,
+                    "est_rate": 0.0,
+                    "is_est_valid": False,
+                    "update_time": "--"
+                })
             except Exception as e:
                 logger.error(f"Error processing position {code}: {e}")
                 positions.append({

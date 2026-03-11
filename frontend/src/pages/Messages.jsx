@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Bell, Trash2, CheckCheck, ChevronRight, AlertTriangle, Lightbulb, X } from 'lucide-react';
+import { Bell, Trash2, CheckCheck, ChevronRight, AlertTriangle, Lightbulb, X, BarChart3, PieChart, Bot, TrendingUp } from 'lucide-react';
 import { getMessages, getMessage, markMessageAsRead, markAllMessagesAsRead, deleteMessage } from '../services/api';
 
 const Messages = () => {
@@ -10,12 +10,23 @@ const Messages = () => {
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [messageCache, setMessageCache] = useState({});
+  const [activeType, setActiveType] = useState('all');
   const pageSize = 20;
 
-  const fetchMessages = useCallback(async (pageNum = 0) => {
+  // 消息类型配置
+  const messageTypes = [
+    { key: 'all', label: '全部', icon: Bell },
+    { key: 'portfolio_analysis', label: '持仓分析', icon: PieChart },
+    { key: 'fund_analysis', label: '基金分析', icon: BarChart3 },
+    { key: 'ai_review', label: 'AI审视', icon: Bot },
+  ];
+
+  const fetchMessages = useCallback(async (pageNum = 0, msgType = activeType) => {
     setLoading(true);
     try {
-      const data = await getMessages('portfolio_analysis', pageSize, pageNum * pageSize);
+      // 根据类型获取消息
+      const typeParam = msgType === 'all' ? null : msgType;
+      const data = await getMessages(typeParam, pageSize, pageNum * pageSize);
       setMessages(data.messages || []);
       setTotal(data.total || 0);
     } catch (err) {
@@ -23,11 +34,17 @@ const Messages = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeType]);
 
   useEffect(() => {
     fetchMessages(page);
-  }, [page, fetchMessages]);
+  }, [page, fetchMessages, activeType]);
+
+  // 切换消息类型
+  const handleTypeChange = useCallback((type) => {
+    setActiveType(type);
+    setPage(0);
+  }, []);
 
   const handleViewMessage = useCallback(async (msg) => {
     // 检查缓存
@@ -102,7 +119,16 @@ const Messages = () => {
   }, []);
 
   const formatDate = useCallback((dateStr) => {
-    const date = new Date(dateStr);
+    // 处理无时区的日期字符串，假设为本地时间
+    let date;
+    if (dateStr.includes('T') || dateStr.includes('Z')) {
+      // ISO格式，需要转换为本地时间
+      date = new Date(dateStr);
+    } else {
+      // 无时区的日期字符串，直接解析为本地时间
+      date = new Date(dateStr.replace(/-/g, '/'));
+    }
+    
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
@@ -137,19 +163,29 @@ const Messages = () => {
   const hasUnreadMessages = useMemo(() => messages.some(m => !m.read), [messages]);
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="bg-indigo-100 p-2 rounded-lg">
-            <Bell className="w-6 h-6 text-indigo-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">消息中心</h1>
-            <p className="text-sm text-slate-500">持仓分析历史记录</p>
-          </div>
-        </div>
-        
+    <div className="space-y-6">
+      {/* 消息类型筛选标签 */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {messageTypes.map((type) => {
+          const Icon = type.icon;
+          return (
+            <button
+              key={type.key}
+              onClick={() => handleTypeChange(type.key)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeType === type.key
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {type.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-end mb-6">
         {hasUnreadMessages && (
           <button
             onClick={handleMarkAllRead}
@@ -198,11 +234,6 @@ const Messages = () => {
                       )}
                       
                       <div className="flex items-center gap-3 text-xs">
-                        {msg.score !== null && msg.score !== undefined && (
-                          <span className={`px-2 py-0.5 rounded font-medium ${getScoreColor(msg.score)}`}>
-                            评分: {msg.score}
-                          </span>
-                        )}
                         {msg.risk_level && (
                           <span className={`px-2 py-0.5 rounded font-medium ${getRiskColor(msg.risk_level)}`}>
                             {msg.risk_level}
@@ -251,110 +282,373 @@ const Messages = () => {
           )}
         </div>
 
-        {/* Message Detail */}
+        {/* Message Detail Modal */}
         {selectedMessage && (
-          <div className="w-[480px] bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden sticky top-4 h-fit max-h-[calc(100vh-2rem)] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-100 p-4 flex items-center justify-between">
-              <h2 className="font-bold text-slate-800">分析详情</h2>
-              <button
-                onClick={() => setSelectedMessage(null)}
-                className="p-1 hover:bg-slate-100 rounded-lg"
-              >
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="sticky top-0 bg-white border-b border-slate-100 p-4 flex items-center justify-between flex-shrink-0">
+                <h2 className="font-bold text-slate-800">分析详情</h2>
+                <button
+                  onClick={() => setSelectedMessage(null)}
+                  className="p-1 hover:bg-slate-100 rounded-lg"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1 p-4">
+                {detailLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  </div>
+                ) : selectedMessage.error ? (
+                  <div className="text-red-500">{selectedMessage.error}</div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Risk Level */}
+                    {selectedMessage.risk_level && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-500">风险评级:</span>
+                        <span className={`px-2 py-1 rounded text-sm font-medium ${getRiskColor(selectedMessage.risk_level)}`}>
+                          {selectedMessage.risk_level}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Fund Analysis Detail - 单个基金分析详情 */}
+                    {selectedMessage.msg_type === 'fund_analysis' && selectedMessage.content && (
+                      <>
+                        {/* 基金信息 */}
+                        <div className="bg-indigo-50 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-indigo-900 mb-2">
+                            {selectedMessage.content.fund_name} ({selectedMessage.content.fund_code})
+                          </h4>
+                          {selectedMessage.content.indicators && (
+                            <div className="text-sm text-indigo-700">
+                              <span className="font-medium">市场位置:</span> {selectedMessage.content.indicators.status}
+                              <p className="text-xs text-indigo-600 mt-1">{selectedMessage.content.indicators.desc}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 分析报告 */}
+                        {selectedMessage.content.analysis_report && (
+                          <div className="bg-white border border-slate-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3">AI 分析报告</h4>
+                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-line text-sm">
+                              {selectedMessage.content.analysis_report}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 核心结论 */}
+                        {selectedMessage.content.summary && (
+                          <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+                            <h4 className="text-sm font-semibold text-amber-900 mb-2">核心结论</h4>
+                            <p className="text-sm text-amber-800">{selectedMessage.content.summary}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Overview - 持仓整体概况 (仅 portfolio_analysis 类型显示) */}
+                    {selectedMessage.content?.overview && (
+                      <div className="bg-slate-50 rounded-xl p-4">
+                        <h4 className="text-sm font-semibold text-slate-700 mb-3">持仓整体概况</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">总仓位:</span>
+                            <span className="font-medium">{selectedMessage.content.overview.total_position}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">行业分布:</span>
+                            <span className="font-medium">{selectedMessage.content.overview.industry_distribution?.join(', ')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">集中度风险:</span>
+                            <span className="font-medium">{selectedMessage.content.overview.concentration_risk?.risk_level}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Risk Analysis - 收益与风险分析 */}
+                    {selectedMessage.content?.risk_analysis && (
+                      <div className="bg-blue-50 rounded-xl p-4">
+                        <h4 className="text-sm font-semibold text-slate-700 mb-3">收益与风险分析</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">总盈亏:</span>
+                            <span className={`font-medium ${selectedMessage.content.risk_analysis.total_pnl < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {selectedMessage.content.risk_analysis.total_pnl}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">盈亏比例:</span>
+                            <span className="font-medium">{selectedMessage.content.risk_analysis.pnl_ratio}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">波动率估算:</span>
+                            <span className="font-medium">{selectedMessage.content.risk_analysis.volatility_estimate}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">回撤风险:</span>
+                            <span className="font-medium">{selectedMessage.content.risk_analysis.drawdown_risk}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Fund Analysis - 标的基本面与逻辑 */}
+                    {selectedMessage.content?.fund_analysis && selectedMessage.content.fund_analysis.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                          <Lightbulb className="w-4 h-4 text-yellow-500" />
+                          标的基本面分析
+                        </h4>
+                        <div className="space-y-3">
+                          {selectedMessage.content.fund_analysis.map((fund, idx) => (
+                            <div key={idx} className="bg-white border border-slate-200 p-3 rounded-lg text-sm">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-slate-800">{fund.name} ({fund.code})</span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${fund.prosperity === '高' ? 'bg-green-100 text-green-700' : fund.prosperity === '低' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                  景气度: {fund.prosperity}
+                                </span>
+                              </div>
+                              <p className="text-slate-600 mb-2">{fund.logic}</p>
+                              <div className="flex gap-4 text-xs text-slate-500">
+                                <span>估值: {fund.valuation}</span>
+                                <span className="text-red-500">风险: {fund.risks?.join(', ')}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Diagnosis - 持仓问题诊断 */}
+                    {selectedMessage.content?.diagnosis && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-500" />
+                          持仓问题诊断
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedMessage.content.diagnosis.structure_issues?.length > 0 && (
+                            <div className="bg-red-50 p-3 rounded-lg text-sm">
+                              <span className="font-medium text-red-700">结构问题:</span>
+                              <p className="text-slate-600 mt-1">{selectedMessage.content.diagnosis.structure_issues.join('; ')}</p>
+                            </div>
+                          )}
+                          {selectedMessage.content.diagnosis.overlap_issues?.length > 0 && (
+                            <div className="bg-orange-50 p-3 rounded-lg text-sm">
+                              <span className="font-medium text-orange-700">重复持仓:</span>
+                              <p className="text-slate-600 mt-1">{selectedMessage.content.diagnosis.overlap_issues.join('; ')}</p>
+                            </div>
+                          )}
+                          {selectedMessage.content.diagnosis.black_swan_risks?.length > 0 && (
+                            <div className="bg-purple-50 p-3 rounded-lg text-sm">
+                              <span className="font-medium text-purple-700">黑天鹅风险:</span>
+                              <p className="text-slate-600 mt-1">{selectedMessage.content.diagnosis.black_swan_risks.join('; ')}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recommendations - 优化策略与调仓建议 */}
+                    {selectedMessage.content?.recommendations && selectedMessage.content.recommendations.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                          <Lightbulb className="w-4 h-4 text-green-500" />
+                          优化策略与调仓建议
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedMessage.content.recommendations.map((rec, idx) => (
+                            <div key={idx} className="bg-green-50 p-3 rounded-lg text-sm">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-green-700">{rec.action} - {rec.target_name}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${rec.priority === '高' ? 'bg-red-100 text-red-700' : rec.priority === '中' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}>
+                                  {rec.priority}优先级
+                                </span>
+                              </div>
+                              <p className="text-slate-600">{rec.proportion}</p>
+                              <p className="text-xs text-slate-400 mt-1">{rec.logic}</p>
+                              {rec.buy_sell_points && (
+                                <p className="text-xs text-blue-600 mt-1">买卖点: {rec.buy_sell_points}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* AI Review - AI审视报告详情 */}
+                    {selectedMessage.msg_type === 'ai_review' && selectedMessage.content && (
+                      <>
+                        {/* 账户信息 */}
+                        <div className="bg-indigo-50 rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-indigo-900 mb-2">
+                            {selectedMessage.content.account_type} - 审视日期: {selectedMessage.content.review_date}
+                          </h4>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-indigo-600">AI账户收益率: </span>
+                              <span className={`font-medium ${selectedMessage.content.ai_return_rate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                {selectedMessage.content.ai_return_rate >= 0 ? '+' : ''}{selectedMessage.content.ai_return_rate?.toFixed(2)}%
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-indigo-600">用户账户收益率: </span>
+                              <span className={`font-medium ${selectedMessage.content.source_return_rate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                {selectedMessage.content.source_return_rate >= 0 ? '+' : ''}{selectedMessage.content.source_return_rate?.toFixed(2)}%
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-indigo-600">AI总资产: </span>
+                              <span className="font-medium">{selectedMessage.content.ai_total_value?.toLocaleString('zh-CN')} 元</span>
+                            </div>
+                            <div>
+                              <span className="text-indigo-600">执行交易: </span>
+                              <span className="font-medium">{selectedMessage.content.trades_executed} 笔</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 市场分析 */}
+                        {selectedMessage.content.market_analysis && (
+                          <div className="bg-gradient-to-br from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                              <TrendingUp className="w-4 h-4 text-blue-500" />
+                              市场分析
+                            </h4>
+                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-line text-sm">
+                              {selectedMessage.content.market_analysis}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 组合分析 */}
+                        {selectedMessage.content.portfolio_analysis && (
+                          <div className="bg-gradient-to-br from-white to-green-50 border border-slate-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                              <PieChart className="w-4 h-4 text-green-500" />
+                              组合分析
+                            </h4>
+                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-line text-sm">
+                              {selectedMessage.content.portfolio_analysis}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 收益对比 */}
+                        {selectedMessage.content.performance_comparison && (
+                          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                              <BarChart3 className="w-4 h-4 text-blue-600" />
+                              收益对比分析
+                            </h4>
+                            <div className="prose prose-sm max-w-none text-blue-800 leading-relaxed whitespace-pre-line text-sm">
+                              {selectedMessage.content.performance_comparison}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 调仓策略 */}
+                        {selectedMessage.content.adjustment_strategy && (
+                          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4">
+                            <h4 className="text-sm font-semibold text-amber-900 mb-3 flex items-center gap-2">
+                              <Lightbulb className="w-4 h-4 text-amber-600" />
+                              调仓策略
+                            </h4>
+                            <div className="space-y-4">
+                              {/* 核心目标 */}
+                              {selectedMessage.content.adjustment_strategy.includes('核心目标：') && (
+                                <div className="bg-white/80 rounded-lg p-3 border border-amber-100">
+                                  <div className="font-semibold text-amber-900 mb-2">核心目标：</div>
+                                  <div className="text-amber-800 text-sm">
+                                    {selectedMessage.content.adjustment_strategy.split('核心目标：')[1].split('具体策略：')[0]}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* 具体策略 */}
+                              {selectedMessage.content.adjustment_strategy.includes('具体策略：') && (
+                                <div>
+                                  <div className="font-semibold text-amber-900 mb-2">具体策略：</div>
+                                  <div className="space-y-3 ml-2">
+                                    {selectedMessage.content.adjustment_strategy.split('具体策略：')[1].split('）').map((strategy, index) => {
+                                      if (strategy.trim()) {
+                                        return (
+                                          <div key={index} className="flex gap-2">
+                                            <span className="text-amber-600 font-medium min-w-[24px]">{index + 1}）</span>
+                                            <span className="text-amber-800 text-sm flex-1">
+                                              {strategy.split('）')[0].trim()}
+                                            </span>
+                                          </div>
+                                        );
+                                      }
+                                      return null;
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* 普通文本格式 */}
+                              {!selectedMessage.content.adjustment_strategy.includes('核心目标：') && !selectedMessage.content.adjustment_strategy.includes('具体策略：') && (
+                                <div className="text-amber-800 text-sm whitespace-pre-line">
+                                  {selectedMessage.content.adjustment_strategy}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 交易记录 */}
+                        {selectedMessage.content.trades && selectedMessage.content.trades.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                              <Lightbulb className="w-4 h-4 text-green-500" />
+                              执行的交易
+                            </h4>
+                            <div className="space-y-2">
+                              {selectedMessage.content.trades.map((trade, idx) => (
+                                <div key={idx} className="bg-green-50 p-3 rounded-lg text-sm">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-medium text-green-700">
+                                      {trade.trade_type === 'buy' ? '买入' : '卖出'} - {trade.name} ({trade.code})
+                                    </span>
+                                    <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">
+                                      {trade.shares} 份 @ {trade.price?.toFixed(4)}
+                                    </span>
+                                  </div>
+                                  <p className="text-slate-600">金额: {trade.amount?.toLocaleString('zh-CN')} 元</p>
+                                  <p className="text-xs text-slate-400 mt-1">理由: {trade.reason}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Conclusion - 总结性结论 */}
+                    {selectedMessage.content?.conclusion && (
+                      <div className="bg-slate-800 rounded-xl p-4 text-white">
+                        <h4 className="text-sm font-semibold mb-2 text-slate-300">分析结论</h4>
+                        <p className="text-sm leading-relaxed whitespace-pre-line">
+                          {selectedMessage.content.conclusion}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Created At */}
+                    <div className="text-xs text-slate-400 pt-2 border-t border-slate-100">
+                      生成时间: {new Date(selectedMessage.created_at).toLocaleString('zh-CN')}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            
-            {detailLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-              </div>
-            ) : selectedMessage.error ? (
-              <div className="p-4 text-red-500">{selectedMessage.error}</div>
-            ) : (
-              <div className="p-4 space-y-4">
-                {/* Score */}
-                {selectedMessage.score !== undefined && (
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-slate-600">健康度评分</span>
-                      <span className={`text-3xl font-bold ${getScoreColor(selectedMessage.score).split(' ')[0]}`}>
-                        {selectedMessage.score}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Risk Level */}
-                {selectedMessage.risk_level && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500">风险评级:</span>
-                    <span className={`px-2 py-1 rounded text-sm font-medium ${getRiskColor(selectedMessage.risk_level)}`}>
-                      {selectedMessage.risk_level}
-                    </span>
-                  </div>
-                )}
-
-                {/* Problems */}
-                {selectedMessage.content?.problems && selectedMessage.content.problems.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-red-500" />
-                      发现的问题 ({selectedMessage.content.problems.length}个)
-                    </h4>
-                    <div className="space-y-2">
-                      {selectedMessage.content.problems.map((problem, idx) => (
-                        <div key={idx} className="bg-red-50 p-3 rounded-lg text-sm">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-red-700">{problem.type}</span>
-                            {problem.fund_code && (
-                              <span className="text-xs text-slate-500">{problem.fund_code}</span>
-                            )}
-                          </div>
-                          <p className="text-slate-600">{problem.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Suggestions */}
-                {selectedMessage.content?.suggestions && selectedMessage.content.suggestions.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                      <Lightbulb className="w-4 h-4 text-yellow-500" />
-                      优化建议
-                    </h4>
-                    <div className="space-y-2">
-                      {selectedMessage.content.suggestions.map((suggestion, idx) => (
-                        <div key={idx} className="bg-green-50 p-3 rounded-lg text-sm">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-green-700">{suggestion.action}</span>
-                            <span className="text-xs text-slate-400">{suggestion.priority}优先级</span>
-                          </div>
-                          <p className="text-slate-600">{suggestion.target}</p>
-                          <p className="text-xs text-slate-400 mt-1">{suggestion.logic}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Critique */}
-                {selectedMessage.content?.critique && (
-                  <div className="bg-slate-800 rounded-xl p-4 text-white">
-                    <h4 className="text-sm font-semibold mb-2 text-slate-300">Linus 的总结</h4>
-                    <p className="text-sm leading-relaxed whitespace-pre-line">
-                      {selectedMessage.content.critique}
-                    </p>
-                  </div>
-                )}
-
-                {/* Created At */}
-                <div className="text-xs text-slate-400 pt-2 border-t border-slate-100">
-                  生成时间: {new Date(selectedMessage.created_at).toLocaleString('zh-CN')}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

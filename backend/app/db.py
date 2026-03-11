@@ -7,6 +7,7 @@ from .config import Config
 logger = logging.getLogger(__name__)
 
 def get_db_connection():
+    """获取数据库连接"""
     # 确保数据库目录存在
     db_dir = Path(Config.DB_PATH).parent
     db_dir.mkdir(parents=True, exist_ok=True)
@@ -15,10 +16,14 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     # Enable WAL mode for better concurrency
     conn.execute("PRAGMA journal_mode=WAL")
+    # 优化性能设置
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=10000")
+    conn.execute("PRAGMA temp_store=MEMORY")
     return conn
 
 def init_db():
-    """Initialize the database schema with migration support."""
+    """Initialize database schema with migration support."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -344,6 +349,227 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_read ON messages(read);")
 
         cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (3)")
+
+    # Migration: Crypto positions and prices tables
+    if current_version < 4:
+        logger.info("Running migration: adding crypto tables")
+
+        # Crypto positions table - store cryptocurrency holdings
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS crypto_positions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL DEFAULT 1,
+                symbol TEXT NOT NULL,
+                name TEXT,
+                cost REAL NOT NULL DEFAULT 0.0,
+                amount REAL NOT NULL DEFAULT 0.0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT,
+                UNIQUE(account_id, symbol)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_crypto_positions_account ON crypto_positions(account_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_crypto_positions_symbol ON crypto_positions(symbol);")
+
+        # Crypto prices table - cache cryptocurrency prices
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS crypto_prices (
+                symbol TEXT NOT NULL,
+                price_usd REAL NOT NULL,
+                price_cny REAL NOT NULL,
+                change_24h REAL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (symbol)
+            )
+        """)
+
+        # Crypto transactions table - log crypto trades
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS crypto_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL DEFAULT 1,
+                symbol TEXT NOT NULL,
+                op_type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                price REAL NOT NULL,
+                total_cny REAL NOT NULL,
+                trade_time TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_crypto_transactions_account ON crypto_transactions(account_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_crypto_transactions_symbol ON crypto_transactions(symbol);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_crypto_transactions_time ON crypto_transactions(trade_time);")
+
+        cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (4)")
+
+    # Migration: AI模拟账户支持
+    if current_version < 5:
+        logger.info("Running migration: adding AI simulation account support")
+
+        # 1. AI模拟账户表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_simulation_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL DEFAULT 'AI模拟账户',
+                description TEXT,
+                source_account_id INTEGER NOT NULL,
+                source_type TEXT DEFAULT 'fund',
+                initial_capital REAL NOT NULL DEFAULT 0.0,
+                current_value REAL NOT NULL DEFAULT 0.0,
+                total_return_rate REAL DEFAULT 0.0,
+                is_active INTEGER DEFAULT 1,
+                review_day_of_week INTEGER DEFAULT 1,
+                review_interval_type TEXT DEFAULT 'week',  -- 审视周期类型：day, week, month, hour
+                review_interval INTEGER DEFAULT 1,       -- 审视间隔：1表示每天/每周/每月/每小时
+                last_review_date TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (source_account_id) REFERENCES accounts(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_accounts_source ON ai_simulation_accounts(source_account_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_accounts_active ON ai_simulation_accounts(is_active);")
+
+        # 2. AI模拟持仓表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_simulation_positions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ai_account_id INTEGER NOT NULL,
+                code TEXT NOT NULL,
+                name TEXT,
+                asset_type TEXT DEFAULT 'fund',
+                cost REAL NOT NULL DEFAULT 0.0,
+                shares REAL NOT NULL DEFAULT 0.0,
+                current_price REAL DEFAULT 0.0,
+                market_value REAL DEFAULT 0.0,
+                return_rate REAL DEFAULT 0.0,
+                weight REAL DEFAULT 0.0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ai_account_id) REFERENCES ai_simulation_accounts(id) ON DELETE CASCADE,
+                UNIQUE(ai_account_id, code)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_positions_account ON ai_simulation_positions(ai_account_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_positions_code ON ai_simulation_positions(code);")
+
+        # 3. AI调仓历史表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_simulation_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ai_account_id INTEGER NOT NULL,
+                trade_date TEXT NOT NULL,
+                code TEXT NOT NULL,
+                name TEXT,
+                asset_type TEXT DEFAULT 'fund',
+                trade_type TEXT NOT NULL,
+                shares REAL NOT NULL,
+                price REAL NOT NULL,
+                amount REAL NOT NULL,
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ai_account_id) REFERENCES ai_simulation_accounts(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_trades_account ON ai_simulation_trades(ai_account_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_trades_date ON ai_simulation_trades(trade_date);")
+
+        # 4. AI账户资产历史表（用于绘制走势对比）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_simulation_value_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ai_account_id INTEGER NOT NULL,
+                record_date TEXT NOT NULL,
+                ai_value REAL NOT NULL,
+                source_value REAL NOT NULL,
+                ai_return_rate REAL DEFAULT 0.0,
+                source_return_rate REAL DEFAULT 0.0,
+                outperformance REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ai_account_id) REFERENCES ai_simulation_accounts(id) ON DELETE CASCADE,
+                UNIQUE(ai_account_id, record_date)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_value_account ON ai_simulation_value_history(ai_account_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_value_date ON ai_simulation_value_history(record_date);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_value_account_date ON ai_simulation_value_history(ai_account_id, record_date);")
+
+        # 5. AI审视记录表
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ai_simulation_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ai_account_id INTEGER NOT NULL,
+                review_date TEXT NOT NULL,
+                review_type TEXT DEFAULT 'weekly',
+                market_analysis TEXT,
+                portfolio_analysis TEXT,
+                adjustment_strategy TEXT,
+                executed_trades INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ai_account_id) REFERENCES ai_simulation_accounts(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_reviews_account ON ai_simulation_reviews(ai_account_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ai_sim_reviews_date ON ai_simulation_reviews(review_date);")
+
+        cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (5)")
+
+    # Migration: AI模拟账户支持数字货币
+    if current_version < 6:
+        logger.info("Running migration: adding crypto support for AI simulation accounts")
+
+        # 添加 source_type 列（如果不存在）
+        try:
+            cursor.execute("ALTER TABLE ai_simulation_accounts ADD COLUMN source_type TEXT DEFAULT 'fund'")
+            logger.info("Added source_type column to ai_simulation_accounts")
+        except Exception as e:
+            logger.info(f"source_type column may already exist: {e}")
+
+        # 创建数字货币账户（如果不存在）
+        try:
+            cursor.execute("INSERT OR IGNORE INTO accounts (name, description) VALUES (?, ?)", ("数字货币账户", "数字货币持仓账户"))
+            logger.info("Created default crypto account")
+        except Exception as e:
+            logger.info(f"Crypto account may already exist: {e}")
+
+        cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (6)")
+
+    # Migration: 添加 crypto_positions current_price 列
+    if current_version < 7:
+        logger.info("Running migration: adding current_price column to crypto_positions")
+
+        # 添加 current_price 列（如果不存在）
+        try:
+            cursor.execute("ALTER TABLE crypto_positions ADD COLUMN current_price REAL DEFAULT 0.0")
+            logger.info("Added current_price column to crypto_positions")
+        except Exception as e:
+            logger.info(f"current_price column may already exist: {e}")
+
+        cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (7)")
+
+    # Migration: Add review interval fields to AI accounts
+    if current_version < 8:
+        logger.info("Running migration: adding review interval fields to AI accounts")
+        try:
+            cursor.execute("ALTER TABLE ai_simulation_accounts ADD COLUMN review_interval_type TEXT DEFAULT 'week'")
+            cursor.execute("ALTER TABLE ai_simulation_accounts ADD COLUMN review_interval INTEGER DEFAULT 1")
+            logger.info("Added review interval fields to ai_simulation_accounts")
+        except Exception as e:
+            logger.info(f"Review interval fields may already exist: {e}")
+
+        cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (8)")
+
+    # Migration: Add performance_comparison field to AI reviews
+    if current_version < 9:
+        logger.info("Running migration: adding performance_comparison field to AI reviews")
+        try:
+            cursor.execute("ALTER TABLE ai_simulation_reviews ADD COLUMN performance_comparison TEXT")
+            logger.info("Added performance_comparison field to ai_simulation_reviews")
+        except Exception as e:
+            logger.info(f"performance_comparison field may already exist: {e}")
+
+        cursor.execute("INSERT OR IGNORE INTO schema_version (version) VALUES (9)")
 
     conn.commit()
     conn.close()

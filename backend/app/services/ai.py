@@ -1,6 +1,7 @@
 import os
 import re
 import datetime
+from datetime import timezone, timedelta
 import numpy as np
 import pandas as pd
 from typing import Optional, Dict, Any, List
@@ -18,6 +19,12 @@ class AIService:
     def __init__(self):
         # 不在初始化时创建 LLM，而是每次调用时动态创建
         pass
+
+    def _get_local_time(self):
+        """获取本地时间（东八区）"""
+        utc_now = datetime.datetime.now(timezone.utc)
+        local_tz = timezone(timedelta(hours=8))  # 东八区
+        return utc_now.astimezone(local_tz)
 
     def _init_llm(self, fast_mode=True):
         # 每次调用时重新读取配置，支持热重载
@@ -98,15 +105,17 @@ class AIService:
     def _save_analysis_to_db(self, fund_code: str, fund_name: str, analysis: Dict[str, Any]):
         """
         Save AI analysis result to database for historical review.
+        Also save to messages table for unified message center access.
         """
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
 
-            now = datetime.datetime.now()
+            now = self._get_local_time()
             analysis_date = now.strftime("%Y-%m-%d")
             analysis_time = now.strftime("%H:%M:%S")
 
+            # Save to ai_analysis_history table
             cursor.execute("""
                 INSERT INTO ai_analysis_history
                 (fund_code, fund_name, analysis_date, analysis_time, risk_level, status,
@@ -126,8 +135,49 @@ class AIService:
 
             conn.commit()
             conn.close()
+
+            # Also save to messages table for unified access
+            self._save_fund_analysis_to_messages(fund_code, fund_name, analysis)
+
         except Exception as e:
             print(f"Failed to save analysis to database: {e}")
+
+    def _save_fund_analysis_to_messages(self, fund_code: str, fund_name: str, analysis: Dict[str, Any]):
+        """保存单个基金分析结果到消息表"""
+        try:
+            from .messages import message_service
+            import json
+
+            risk_level = analysis.get("risk_level", "未知")
+            status = analysis.get("indicators", {}).get("status", "--")
+            summary = analysis.get("summary", "")
+
+            # 构建标题
+            title = f"{fund_name} ({fund_code}) - AI分析"
+
+            # 构建内容结构
+            content = {
+                "fund_code": fund_code,
+                "fund_name": fund_name,
+                "risk_level": risk_level,
+                "status": status,
+                "indicators": analysis.get("indicators", {}),
+                "analysis_report": analysis.get("analysis_report", ""),
+                "summary": summary
+            }
+
+            # 保存消息
+            message_service.create_message({
+                "msg_type": "fund_analysis",
+                "title": title,
+                "content": content,
+                "summary": summary[:100] + "..." if len(summary) > 100 else summary,
+                "risk_level": risk_level,
+                "fund_count": 1,
+                "total_value": None
+            })
+        except Exception as e:
+            print(f"Failed to save fund analysis to messages: {e}")
 
     def get_analysis_history(self, fund_code: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -154,129 +204,6 @@ class AIService:
             print(f"Failed to get analysis history: {e}")
             return []
 
-    def get_user_notes(self, fund_code: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get user notes for a specific fund.
-        """
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT id, fund_code, fund_name, note_date, note_time, note_content, note_color
-                FROM user_notes
-                WHERE fund_code = ?
-                ORDER BY note_date DESC, note_time DESC
-                LIMIT ?
-            """, (fund_code, limit))
-
-            rows = cursor.fetchall()
-            conn.close()
-
-            return [dict(row) for row in rows]
-        except Exception as e:
-            print(f"Failed to get user notes: {e}")
-            return []
-
-    def save_user_note(self, fund_code: str, fund_name: str, note_content: str, note_date: str = None, note_color: str = "#10b981") -> Dict[str, Any]:
-        """
-        Save a user note for a specific fund.
-        """
-        try:
-            now = datetime.datetime.now()
-            if not note_date:
-                note_date = now.strftime("%Y-%m-%d")
-            note_time = now.strftime("%H:%M:%S")
-
-            conn = get_db_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO user_notes (fund_code, fund_name, note_date, note_time, note_content, note_color)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (fund_code, fund_name, note_date, note_time, note_content, note_color))
-                
-                note_id = cursor.lastrowid
-                conn.commit()
-            finally:
-                conn.close()
-
-            return {
-                "id": note_id,
-                "fund_code": fund_code,
-                "fund_name": fund_name,
-                "note_date": note_date,
-                "note_time": note_time,
-                "note_content": note_content,
-                "note_color": note_color
-            }
-        except Exception as e:
-            print(f"Failed to save user note: {e}")
-            return {"error": str(e)}
-
-    def delete_user_note(self, note_id: int) -> bool:
-        """
-        Delete a user note.
-        """
-        try:
-            conn = get_db_connection()
-            try:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM user_notes WHERE id = ?", (note_id,))
-                conn.commit()
-            finally:
-                conn.close()
-            return True
-        except Exception as e:
-            print(f"Failed to delete user note: {e}")
-            return False
-
-    def update_user_note(self, note_id: int, note_content: str, note_color: str = None) -> Dict[str, Any]:
-        """
-        Update a user note.
-        """
-        try:
-            conn = get_db_connection()
-            try:
-                cursor = conn.cursor()
-
-                # Get current note to preserve other fields
-                cursor.execute("SELECT * FROM user_notes WHERE id = ?", (note_id,))
-                row = cursor.fetchone()
-                if not row:
-                    return {"error": "Note not found"}
-
-                # Update note_content and note_color (if provided)
-                if note_color:
-                    cursor.execute("""
-                        UPDATE user_notes 
-                        SET note_content = ?, note_color = ?
-                        WHERE id = ?
-                    """, (note_content, note_color, note_id))
-                else:
-                    cursor.execute("""
-                        UPDATE user_notes 
-                        SET note_content = ?
-                        WHERE id = ?
-                    """, (note_content, note_id))
-
-                conn.commit()
-
-                # Fetch updated note
-                cursor.execute("""
-                    SELECT id, fund_code, fund_name, note_date, note_time, note_content, note_color
-                    FROM user_notes
-                    WHERE id = ?
-                """, (note_id,))
-                updated_row = cursor.fetchone()
-            finally:
-                conn.close()
-
-            return dict(updated_row) if updated_row else {"error": "Failed to fetch updated note"}
-        except Exception as e:
-            print(f"Failed to update user note: {e}")
-            return {"error": str(e)}
-
     async def analyze_fund(self, fund_info: Dict[str, Any]) -> Dict[str, Any]:
         # 每次调用时重新初始化 LLM，支持配置热重载
         llm = self._init_llm()
@@ -286,7 +213,7 @@ class AIService:
                 "summary": "未配置 LLM API Key，无法进行分析。",
                 "risk_level": "未知",
                 "analysis_report": "请在设置页面配置 OpenAI API Key 以启用 AI 分析功能。",
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
+                "timestamp": self._get_local_time().strftime("%H:%M:%S")
             }
 
         fund_id = fund_info.get("id")
@@ -350,7 +277,7 @@ class AIService:
                 "risk_level": "未知",
                 "analysis_report": "LLM 初始化失败，请检查配置",
                 "indicators": indicators,
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
+                "timestamp": self._get_local_time().strftime("%H:%M:%S")
             }
 
         chain = LINUS_FINANCIAL_ANALYSIS_PROMPT | llm | StrOutputParser()
@@ -374,7 +301,7 @@ class AIService:
 
             # Enrich with indicators for frontend display
             result["indicators"] = indicators
-            result["timestamp"] = datetime.datetime.now().strftime("%H:%M:%S")
+            result["timestamp"] = self._get_local_time().strftime("%H:%M:%S")
 
             # Save analysis to database
             self._save_analysis_to_db(fund_id, fund_name, result)
@@ -388,19 +315,19 @@ class AIService:
                 "risk_level": "未知",
                 "analysis_report": f"LLM 调用或解析失败: {str(e)}",
                 "indicators": indicators,
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
+                "timestamp": self._get_local_time().strftime("%H:%M:%S")
             }
 
     async def analyze_portfolio(self, positions: List[Dict[str, Any]], summary: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Analyze a portfolio of fund positions.
+        Analyze a portfolio of fund positions or crypto positions.
         """
         llm = self._init_llm()
 
         if not llm:
             return {
                 "error": "未配置 LLM API Key，无法进行分析。",
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
+                "timestamp": self._get_local_time().strftime("%H:%M:%S")
             }
 
         # Calculate portfolio statistics
@@ -409,27 +336,43 @@ class AIService:
         total_income = summary.get("total_income", 0)
         total_return_rate = summary.get("total_return_rate", 0)
 
-        # Group by fund type
+        # Check if this is crypto portfolio (has 'symbol' field) or fund portfolio (has 'code' field)
+        is_crypto = positions and "symbol" in positions[0] if positions else False
+
+        # Group by type (fund type or crypto)
         type_allocation = {}
         for pos in positions:
-            fund_type = pos.get("type", "未知")
-            if fund_type not in type_allocation:
-                type_allocation[fund_type] = {"value": 0, "count": 0}
-            type_allocation[fund_type]["value"] += pos.get("actual_market_value", 0)
-            type_allocation[fund_type]["count"] += 1
+            if is_crypto:
+                # For crypto, group by "数字货币"
+                asset_type = "数字货币"
+            else:
+                # For funds, use the fund type
+                asset_type = pos.get("type", "未知")
+
+            if asset_type not in type_allocation:
+                type_allocation[asset_type] = {"value": 0, "count": 0}
+
+            # Get market value - crypto uses 'market_value', funds use 'actual_market_value'
+            market_value = pos.get("market_value", pos.get("actual_market_value", 0))
+            type_allocation[asset_type]["value"] += market_value
+            type_allocation[asset_type]["count"] += 1
 
         # Calculate percentages
-        for fund_type in type_allocation:
-            type_allocation[fund_type]["percentage"] = (
-                type_allocation[fund_type]["value"] / total_value * 100 if total_value > 0 else 0
+        for asset_type in type_allocation:
+            type_allocation[asset_type]["percentage"] = (
+                type_allocation[asset_type]["value"] / total_value * 100 if total_value > 0 else 0
             )
 
         # Sort positions by market value
-        sorted_positions = sorted(positions, key=lambda x: x.get("actual_market_value", 0), reverse=True)
+        sorted_positions = sorted(
+            positions,
+            key=lambda x: x.get("market_value", x.get("actual_market_value", 0)),
+            reverse=True
+        )
 
         # Prepare portfolio summary
         portfolio_summary = {
-            "fund_count": len(positions),
+            "asset_count": len(positions),
             "total_value": total_value,
             "total_cost": total_cost,
             "total_income": total_income,
@@ -437,22 +380,26 @@ class AIService:
             "type_allocation": type_allocation,
             "top_holdings": [
                 {
-                    "code": pos.get("code"),
+                    "code": pos.get("symbol") if is_crypto else pos.get("code"),
                     "name": pos.get("name"),
-                    "type": pos.get("type"),
-                    "market_value": pos.get("actual_market_value"),
+                    "type": "数字货币" if is_crypto else pos.get("type"),
+                    "market_value": pos.get("market_value", pos.get("actual_market_value", 0)),
                     "return_rate": pos.get("total_return_rate"),
-                    "weight": pos.get("actual_market_value", 0) / total_value * 100 if total_value > 0 else 0
+                    "weight": ((pos.get("market_value", pos.get("actual_market_value", 0)) / total_value * 100)
+                    if total_value > 0 else 0)
                 }
                 for pos in sorted_positions[:5]
             ]
         }
 
         # Create prompt for portfolio analysis
-        from .prompts import LINUS_PORTFOLIO_CRITIQUE_PROMPT
+        # Use crypto-specific prompt for crypto portfolios, fund prompt for fund portfolios
+        from .prompts import PROFESSIONAL_PORTFOLIO_ANALYSIS_PROMPT, CRYPTO_PORTFOLIO_ANALYSIS_PROMPT
+
+        prompt_template = CRYPTO_PORTFOLIO_ANALYSIS_PROMPT if is_crypto else PROFESSIONAL_PORTFOLIO_ANALYSIS_PROMPT
 
         try:
-            chain = LINUS_PORTFOLIO_CRITIQUE_PROMPT | llm | StrOutputParser()
+            chain = prompt_template | llm | StrOutputParser()
 
             raw_result = await chain.ainvoke({
                 "portfolio_summary": str(portfolio_summary),
@@ -471,7 +418,7 @@ class AIService:
 
             # Add portfolio overview
             result["portfolio_overview"] = {
-                "fund_count": len(positions),
+                "asset_count": len(positions),
                 "total_value": total_value,
                 "total_income": total_income,
                 "return_rate": total_return_rate
@@ -479,18 +426,18 @@ class AIService:
 
             # Add asset allocation
             result["asset_allocation"] = {
-                fund_type: {
+                asset_type: {
                     "value": data["value"],
                     "percentage": data["percentage"],
                     "count": data["count"]
                 }
-                for fund_type, data in type_allocation.items()
+                for asset_type, data in type_allocation.items()
             }
 
-            result["timestamp"] = datetime.datetime.now().strftime("%H:%M:%S")
+            result["timestamp"] = self._get_local_time().strftime("%H:%M:%S")
 
             # Save to messages
-            self._save_portfolio_analysis_to_messages(result, len(positions), total_value)
+            self._save_portfolio_analysis_to_messages(result, len(positions), total_value, is_crypto)
 
             return result
 
@@ -499,45 +446,49 @@ class AIService:
             return {
                 "error": f"分析生成失败: {str(e)}",
                 "portfolio_overview": {
-                    "fund_count": len(positions),
+                    "asset_count": len(positions),
                     "total_value": total_value,
                     "total_income": total_income,
                     "return_rate": total_return_rate
                 },
                 "asset_allocation": {
-                    fund_type: {
+                    asset_type: {
                         "value": data["value"],
                         "percentage": data["percentage"]
                     }
-                    for fund_type, data in type_allocation.items()
+                    for asset_type, data in type_allocation.items()
                 },
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
+                "timestamp": self._get_local_time().strftime("%H:%M:%S")
             }
 
-    def _save_portfolio_analysis_to_messages(self, result: Dict[str, Any], fund_count: int, total_value: float):
+    def _save_portfolio_analysis_to_messages(self, result: Dict[str, Any], asset_count: int, total_value: float, is_crypto: bool = False):
         """保存持仓分析结果到消息表"""
         try:
             from .messages import message_service
-            
+
+            # 从新的返回结构中提取信息
+            risk_analysis = result.get("risk_analysis", {})
+            risk_level = risk_analysis.get("risk_rating", "未知")
+            overview = result.get("overview", {})
+            conclusion = result.get("conclusion", "")
+
             # 构建标题
-            score = result.get("score", 0)
-            risk_level = result.get("risk_level", "未知")
-            title = f"持仓诊断报告 - 健康度{score}分 ({risk_level})"
-            
+            asset_type = "数字货币" if is_crypto else "基金"
+            title = f"{asset_type}持仓分析报告 - {risk_level}"
+
             # 构建摘要
-            critique = result.get("critique", "")
-            summary = critique[:100] + "..." if len(critique) > 100 else critique
-            
+            summary = conclusion[:100] + "..." if len(conclusion) > 100 else conclusion
+
             # 保存消息
             message_service.create_message({
                 "msg_type": "portfolio_analysis",
                 "title": title,
                 "content": result,
                 "summary": summary,
-                "score": score,
                 "risk_level": risk_level,
-                "fund_count": fund_count,
-                "total_value": total_value
+                "asset_count": asset_count,
+                "total_value": total_value,
+                "is_crypto": is_crypto
             })
         except Exception as e:
             print(f"Failed to save portfolio analysis to messages: {e}")

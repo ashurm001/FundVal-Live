@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from fastapi import APIRouter, HTTPException, Body
 from ..db import get_db_connection
 from ..crypto import encrypt_value, decrypt_value
@@ -8,10 +9,8 @@ from ..config import Config
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 需要加密的字段
 ENCRYPTED_FIELDS = {"OPENAI_API_KEY", "SMTP_PASSWORD"}
 
-# 字段验证规则
 def validate_email(email: str) -> bool:
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
@@ -30,6 +29,7 @@ def validate_port(port: str) -> bool:
 @router.get("/settings")
 def get_settings():
     """获取所有设置（加密字段用 *** 掩码）"""
+    start_time = time.time()
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -43,13 +43,11 @@ def get_settings():
             value = row["value"]
             encrypted = row["encrypted"]
 
-            # 加密字段用掩码
             if encrypted and value:
                 settings[key] = "***"
             else:
                 settings[key] = value
 
-        # 如果数据库为空，返回 .env 的默认值（掩码敏感信息）
         if not settings:
             settings = {
                 "OPENAI_API_KEY": "***" if Config.OPENAI_API_KEY else "",
@@ -62,6 +60,8 @@ def get_settings():
                 "EMAIL_FROM": Config.EMAIL_FROM,
             }
 
+        elapsed = time.time() - start_time
+        logger.debug(f"Settings loaded in {elapsed:.3f}s")
         return {"settings": settings}
     except Exception as e:
         logger.error(f"Failed to get settings: {e}")

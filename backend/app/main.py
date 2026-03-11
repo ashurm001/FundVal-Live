@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -6,8 +6,10 @@ from contextlib import asynccontextmanager
 import os
 import sys
 import json
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
-from .routers import funds, ai, account, settings, messages
+from .routers import funds, ai, account, settings, messages, crypto, data_transfer, ai_simulation
 from .db import init_db
 from .services.scheduler import start_scheduler
 
@@ -44,6 +46,33 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Fund Intraday Valuation API", lifespan=lifespan)
 
+# Frontend middleware
+class FrontendMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Skip API routes
+        if request.url.path.startswith("/api/"):
+            return await call_next(request)
+        
+        # Skip assets
+        if request.url.path.startswith("/assets/"):
+            return await call_next(request)
+        
+        # Try to serve static files
+        frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "frontend", "dist")
+        if getattr(sys, 'frozen', False):
+            frontend_dir = os.path.join(sys._MEIPASS, "fundval-live")
+        
+        file_path = os.path.join(frontend_dir, request.url.path.lstrip("/"))
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # Serve index.html for SPA routes
+        index_path = os.path.join(frontend_dir, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        
+        return await call_next(request)
+
 # CORS: allow all for MVP
 app.add_middleware(
     CORSMiddleware,
@@ -53,12 +82,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add frontend middleware
+app.add_middleware(FrontendMiddleware)
+
 # API routes
 app.include_router(funds.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 app.include_router(account.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
+app.include_router(crypto.router, prefix="/api/crypto")
+app.include_router(data_transfer.router, prefix="/api/data")
+app.include_router(ai_simulation.router, prefix="/api")
 
 # Project info endpoint
 @app.get("/api/info")
@@ -91,29 +126,5 @@ if os.path.exists(frontend_dir):
     assets_dir = os.path.join(frontend_dir, "assets")
     if os.path.exists(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
-    @app.get("/")
-    async def serve_frontend():
-        index_path = os.path.join(frontend_dir, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        return {"error": "Frontend not found"}
-
-    @app.get("/{full_path:path}")
-    async def serve_frontend_routes(full_path: str):
-        # 如果是 API 路由，跳过
-        if full_path.startswith("api/"):
-            return {"error": "Not found"}
-
-        # 尝试返回文件
-        file_path = os.path.join(frontend_dir, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
-
-        # 否则返回 index.html（SPA 路由）
-        index_path = os.path.join(frontend_dir, "index.html")
-        if os.path.exists(index_path):
-            return FileResponse(index_path)
-        return {"error": "Frontend not found"}
 else:
     print(f"Warning: Frontend directory not found at {frontend_dir}")

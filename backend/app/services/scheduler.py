@@ -451,16 +451,22 @@ def start_scheduler():
     Simple background thread to check if data needs update.
     """
     def _run():
+        # Wait 5 seconds before starting to avoid blocking startup
+        time.sleep(5)
+        
         # 1. Initial fund list update
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT count(*) as cnt FROM funds")
-        count = cursor.fetchone()["cnt"]
-        conn.close()
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT count(*) as cnt FROM funds")
+            count = cursor.fetchone()["cnt"]
+            conn.close()
 
-        if count == 0:
-            logger.info("DB is empty. Performing initial fetch.")
-            fetch_and_update_funds()
+            if count == 0:
+                logger.info("DB is empty. Performing initial fetch.")
+                fetch_and_update_funds()
+        except Exception as e:
+            logger.error(f"Initial fund list check failed: {e}")
 
         # 2. Main loop
         last_cleanup_date = None
@@ -535,6 +541,69 @@ def start_scheduler():
                 if 16 <= now_cst.hour <= 23 and last_nav_update_hour != now_cst.hour:
                     update_holdings_nav()
                     last_nav_update_hour = now_cst.hour
+
+                # AI模拟账户每日价格和收益更新（每天22:30执行一次）
+                try:
+                    current_time_str = now_cst.strftime("%H:%M")
+                    if current_time_str == "22:30":
+                        ai_conn = get_db_connection()
+                        ai_cursor = ai_conn.cursor()
+                        ai_cursor.execute("""
+                            SELECT id FROM ai_simulation_accounts WHERE is_active = 1
+                        """)
+                        ai_accounts = ai_cursor.fetchall()
+                        ai_conn.close()
+                        
+                        for acc in ai_accounts:
+                            acc_id = acc[0]
+                            try:
+                                from .ai_simulation import AISimulationService
+                                ai_service = AISimulationService()
+                                ai_service.record_daily_value(acc_id)
+                                logger.info(f"AI account {acc_id} daily value recorded")
+                            except Exception as e:
+                                logger.error(f"AI account {acc_id} daily value record error: {e}")
+                except Exception as e:
+                    logger.error(f"AI daily value record check error: {e}")
+
+                # AI模拟账户自动审视（每周一次，在指定日期的18:00执行）
+                try:
+                    current_weekday = now_cst.weekday()  # 0=Monday, 6=Sunday
+                    current_time_str = now_cst.strftime("%H:%M")
+                    
+                    ai_conn = get_db_connection()
+                    ai_cursor = ai_conn.cursor()
+                    ai_cursor.execute("""
+                        SELECT id, review_day_of_week, last_review_date 
+                        FROM ai_simulation_accounts 
+                        WHERE is_active = 1
+                    """)
+                    ai_accounts = ai_cursor.fetchall()
+                    ai_conn.close()
+                    
+                    for acc in ai_accounts:
+                        acc_id = acc[0]
+                        review_day = acc[1] if acc[1] is not None else 0  # 默认周一
+                        last_review = acc[2]
+                        
+                        # 检查是否到了审视时间（周一=0，周日=6，审视时间为18:00）
+                        if current_weekday == review_day and current_time_str >= "18:00":
+                            # 检查今天是否已经审视过
+                            if last_review != today_str:
+                                logger.info(f"Auto reviewing AI account {acc_id}")
+                                try:
+                                    from .ai_simulation import AISimulationService
+                                    ai_service = AISimulationService()
+                                    import asyncio
+                                    result = asyncio.run(ai_service.perform_weekly_review(acc_id))
+                                    if "error" not in result:
+                                        logger.info(f"AI account {acc_id} auto review completed")
+                                    else:
+                                        logger.error(f"AI account {acc_id} auto review failed: {result.get('error')}")
+                                except Exception as e:
+                                    logger.error(f"AI account {acc_id} auto review error: {e}")
+                except Exception as e:
+                    logger.error(f"AI auto review check error: {e}")
 
             except Exception as e:
                 logger.error(f"Scheduler loop error: {e}")
