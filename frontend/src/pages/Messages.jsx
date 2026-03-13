@@ -101,14 +101,16 @@ const Messages = () => {
   }, []);
 
   const formatDate = useCallback((dateStr) => {
-    // 处理无时区的日期字符串，假设为本地时间
+    // 处理UTC时间字符串，转换为本地时间
     let date;
     if (dateStr.includes('T') || dateStr.includes('Z')) {
       // ISO格式，需要转换为本地时间
       date = new Date(dateStr);
     } else {
-      // 无时区的日期字符串，直接解析为本地时间
-      date = new Date(dateStr.replace(/-/g, '/'));
+      // 无时区的日期字符串，假设为UTC时间，需要转换为本地时间
+      // 先解析为UTC时间，然后转换为本地时间
+      const utcDate = new Date(dateStr.replace(/-/g, '/'));
+      date = new Date(utcDate.getTime() + utcDate.getTimezoneOffset() * 60000);
     }
     
     const now = new Date();
@@ -632,7 +634,19 @@ const Messages = () => {
 
                     {/* Created At */}
                     <div className="text-xs text-slate-400 pt-2 border-t border-slate-100">
-                      生成时间: {selectedMessage.created_at}
+                      生成时间: {(() => {
+                        const dateStr = selectedMessage.created_at;
+                        if (dateStr.includes('T') || dateStr.includes('Z')) {
+                          // ISO格式，需要转换为本地时间
+                          const date = new Date(dateStr);
+                          return date.toLocaleString('zh-CN');
+                        } else {
+                          // 无时区的日期字符串，假设为UTC时间，需要转换为本地时间
+                          const utcDate = new Date(dateStr.replace(/-/g, '/'));
+                          const localDate = new Date(utcDate.getTime() + utcDate.getTimezoneOffset() * 60000);
+                          return localDate.toLocaleString('zh-CN');
+                        }
+                      })()}
                     </div>
                   </div>
                 )}
