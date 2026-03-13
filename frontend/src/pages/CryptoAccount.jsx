@@ -363,7 +363,7 @@ const getRateBgColor = (rate) => {
                           <div className="text-xs text-slate-500">${pos.cost.toFixed(2)}</div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="font-mono text-slate-800">${pos.current_price.toFixed(2)}</div>
+                          <div className="font-mono text-slate-800">${pos.current_price.toFixed(4)}</div>
                           <div className={`text-xs ${getRateColor(pos.change_24h)}`}>
                             {pos.change_24h >= 0 ? '+' : ''}{pos.change_24h.toFixed(2)}%
                           </div>
@@ -453,7 +453,7 @@ const getRateBgColor = (rate) => {
                       </div>
                       <div>
                         <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">现价</div>
-                        <div className="font-mono text-slate-800 break-all">${pos.current_price.toFixed(2)}</div>
+                        <div className="font-mono text-slate-800 break-all">${pos.current_price.toFixed(4)}</div>
                       </div>
                       <div>
                         <div className="text-xs text-slate-500 font-medium uppercase tracking-wider">24h涨跌</div>

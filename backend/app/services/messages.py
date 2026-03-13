@@ -12,9 +12,16 @@ def format_local_time(timestamp):
             dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
         else:
             dt = timestamp
+        
+        # 如果时间没有时区信息，假设是UTC时间
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        
+        # 转换为本地时间
         local_dt = dt.astimezone()
         return local_dt.strftime('%Y-%m-%d %H:%M:%S')
-    except:
+    except Exception as e:
+        print(f"Error formatting time: {e}, timestamp: {timestamp}")
         return str(timestamp)
 
 class MessageService:
