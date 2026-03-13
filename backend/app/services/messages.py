@@ -9,7 +9,13 @@ def format_local_time(timestamp):
         return None
     try:
         if isinstance(timestamp, str):
-            dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            # 处理SQLite返回的时间字符串格式
+            if ' ' in timestamp:
+                dt = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                # 假设是UTC时间，添加时区信息
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            else:
+                dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
         else:
             dt = timestamp
         
