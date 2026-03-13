@@ -129,6 +129,11 @@ class MessageService:
                 except:
                     pass
             
+            # 测试时间转换
+            original_time = row["created_at"]
+            formatted_time = format_local_time(original_time)
+            print(f"get_message: Original time: {original_time}, Formatted: {formatted_time}")
+            
             return {
                 "id": row["id"],
                 "msg_type": row["msg_type"],
@@ -140,7 +145,7 @@ class MessageService:
                 "fund_count": row["fund_count"],
                 "total_value": row["total_value"],
                 "read": bool(row["read"]),
-                "created_at": format_local_time(row["created_at"])
+                "created_at": formatted_time
             }
         finally:
             conn.close()
