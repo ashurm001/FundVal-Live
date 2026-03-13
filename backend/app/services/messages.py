@@ -3,6 +3,20 @@ import datetime
 from typing import Dict, Any, Optional, List
 from ..db import get_db_connection
 
+def format_local_time(timestamp):
+    """将UTC时间戳转换为本地时间字符串"""
+    if not timestamp:
+        return None
+    try:
+        if isinstance(timestamp, str):
+            dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        else:
+            dt = timestamp
+        local_dt = dt.astimezone()
+        return local_dt.strftime('%Y-%m-%d %H:%M:%S')
+    except:
+        return str(timestamp)
+
 class MessageService:
     def get_messages(
         self, 
@@ -56,7 +70,7 @@ class MessageService:
                     "fund_count": row["fund_count"],
                     "total_value": row["total_value"],
                     "read": bool(row["read"]),
-                    "created_at": row["created_at"]
+                    "created_at": format_local_time(row["created_at"])
                 })
             
             return {
@@ -104,7 +118,7 @@ class MessageService:
                 "fund_count": row["fund_count"],
                 "total_value": row["total_value"],
                 "read": bool(row["read"]),
-                "created_at": row["created_at"]
+                "created_at": format_local_time(row["created_at"])
             }
         finally:
             conn.close()

@@ -521,8 +521,10 @@ const Messages = () => {
                               <TrendingUp className="w-4 h-4 text-blue-500" />
                               市场分析
                             </h4>
-                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-line text-sm">
-                              {selectedMessage.content.market_analysis}
+                            <div className="bg-white/80 rounded-lg p-3 border border-slate-100">
+                              <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                                {selectedMessage.content.market_analysis}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -534,8 +536,10 @@ const Messages = () => {
                               <PieChart className="w-4 h-4 text-green-500" />
                               组合分析
                             </h4>
-                            <div className="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-line text-sm">
-                              {selectedMessage.content.portfolio_analysis}
+                            <div className="bg-white/80 rounded-lg p-3 border border-slate-100">
+                              <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-line">
+                                {selectedMessage.content.portfolio_analysis}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -547,8 +551,10 @@ const Messages = () => {
                               <BarChart3 className="w-4 h-4 text-blue-600" />
                               收益对比分析
                             </h4>
-                            <div className="prose prose-sm max-w-none text-blue-800 leading-relaxed whitespace-pre-line text-sm">
-                              {selectedMessage.content.performance_comparison}
+                            <div className="bg-white/80 rounded-lg p-3 border border-blue-100">
+                              <div className="text-blue-800 text-sm leading-relaxed whitespace-pre-line">
+                                {selectedMessage.content.performance_comparison}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -575,15 +581,14 @@ const Messages = () => {
                               {selectedMessage.content.adjustment_strategy.includes('具体策略：') && (
                                 <div>
                                   <div className="font-semibold text-amber-900 mb-2">具体策略：</div>
-                                  <div className="space-y-3 ml-2">
-                                    {selectedMessage.content.adjustment_strategy.split('具体策略：')[1].split('）').map((strategy, index) => {
+                                  <div className="space-y-3">
+                                    {selectedMessage.content.adjustment_strategy.split('具体策略：')[1].split(/\d+）/).filter(item => item.trim()).map((strategy, index) => {
                                       if (strategy.trim()) {
                                         return (
-                                          <div key={index} className="flex gap-2">
-                                            <span className="text-amber-600 font-medium min-w-[24px]">{index + 1}）</span>
-                                            <span className="text-amber-800 text-sm flex-1">
-                                              {strategy.split('）')[0].trim()}
-                                            </span>
+                                          <div key={index} className="bg-white/80 rounded-lg p-3 border border-amber-100">
+                                            <div className="text-amber-800 text-sm">
+                                              {strategy.trim()}
+                                            </div>
                                           </div>
                                         );
                                       }
@@ -595,8 +600,10 @@ const Messages = () => {
                               
                               {/* 普通文本格式 */}
                               {!selectedMessage.content.adjustment_strategy.includes('核心目标：') && !selectedMessage.content.adjustment_strategy.includes('具体策略：') && (
-                                <div className="text-amber-800 text-sm whitespace-pre-line">
-                                  {selectedMessage.content.adjustment_strategy}
+                                <div className="bg-white/80 rounded-lg p-3 border border-amber-100">
+                                  <div className="text-amber-800 text-sm whitespace-pre-line">
+                                    {selectedMessage.content.adjustment_strategy}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -643,7 +650,7 @@ const Messages = () => {
 
                     {/* Created At */}
                     <div className="text-xs text-slate-400 pt-2 border-t border-slate-100">
-                      生成时间: {new Date(selectedMessage.created_at).toLocaleString('zh-CN')}
+                      生成时间: {selectedMessage.created_at}
                     </div>
                   </div>
                 )}
