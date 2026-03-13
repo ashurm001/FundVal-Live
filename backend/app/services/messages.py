@@ -11,8 +11,11 @@ def format_local_time(timestamp):
         if isinstance(timestamp, str):
             # 处理SQLite返回的时间字符串格式
             if ' ' in timestamp:
-                # SQLite返回的时间字符串，直接返回，不进行时区转换
-                return timestamp
+                # SQLite返回的时间字符串，假设是UTC时间，转换为本地时间
+                dt = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+                local_dt = dt.astimezone()
+                return local_dt.strftime('%Y-%m-%d %H:%M:%S')
             else:
                 # ISO格式时间，转换为本地时间
                 dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
