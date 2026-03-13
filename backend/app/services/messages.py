@@ -15,20 +15,26 @@ def format_local_time(timestamp):
                 dt = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S')
                 dt = dt.replace(tzinfo=datetime.timezone.utc)
                 local_dt = dt.astimezone()
-                return local_dt.strftime('%Y-%m-%d %H:%M:%S')
+                result = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+                print(f"Time conversion: {timestamp} -> {result}")
+                return result
             else:
                 # ISO格式时间，转换为本地时间
                 dt = datetime.datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=datetime.timezone.utc)
                 local_dt = dt.astimezone()
-                return local_dt.strftime('%Y-%m-%d %H:%M:%S')
+                result = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+                print(f"Time conversion (ISO): {timestamp} -> {result}")
+                return result
         else:
             # datetime对象，转换为本地时间
             if timestamp.tzinfo is None:
                 timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
             local_dt = timestamp.astimezone()
-            return local_dt.strftime('%Y-%m-%d %H:%M:%S')
+            result = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+            print(f"Time conversion (datetime): {timestamp} -> {result}")
+            return result
     except Exception as e:
         print(f"Error formatting time: {e}, timestamp: {timestamp}")
         return str(timestamp)
