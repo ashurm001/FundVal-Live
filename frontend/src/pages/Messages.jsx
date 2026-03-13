@@ -108,9 +108,8 @@ const Messages = () => {
       date = new Date(dateStr);
     } else {
       // 无时区的日期字符串，假设为UTC时间，需要转换为本地时间
-      // 先解析为UTC时间，然后转换为本地时间
-      const utcDate = new Date(dateStr.replace(/-/g, '/'));
-      date = new Date(utcDate.getTime() + utcDate.getTimezoneOffset() * 60000);
+      // 直接使用toLocaleString处理时区转换
+      date = new Date(dateStr.replace(/-/g, '/'));
     }
     
     const now = new Date();
@@ -636,16 +635,11 @@ const Messages = () => {
                     <div className="text-xs text-slate-400 pt-2 border-t border-slate-100">
                       生成时间: {(() => {
                         const dateStr = selectedMessage.created_at;
-                        if (dateStr.includes('T') || dateStr.includes('Z')) {
-                          // ISO格式，需要转换为本地时间
-                          const date = new Date(dateStr);
-                          return date.toLocaleString('zh-CN');
-                        } else {
-                          // 无时区的日期字符串，假设为UTC时间，需要转换为本地时间
-                          const utcDate = new Date(dateStr.replace(/-/g, '/'));
-                          const localDate = new Date(utcDate.getTime() + utcDate.getTimezoneOffset() * 60000);
-                          return localDate.toLocaleString('zh-CN');
-                        }
+                        // 假设数据库中的时间是UTC时间，需要转换为本地时间
+                        // 先创建一个UTC时间对象，然后转换为本地时间
+                        const parts = dateStr.split(/[- :]/);
+                        const utcDate = new Date(Date.UTC(parts[0], parts[1]-1, parts[2], parts[3], parts[4], parts[5]));
+                        return utcDate.toLocaleString('zh-CN');
                       })()}
                     </div>
                   </div>
