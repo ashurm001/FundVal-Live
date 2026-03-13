@@ -2,25 +2,29 @@
 FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app
-COPY package.json ./
 COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm install
+RUN cd frontend && npm install --registry=https://registry.npmmirror.com
 COPY frontend/ ./frontend/
 RUN cd frontend && npm run build
 
 # Stage 2: Build backend
 FROM python:3.13-slim
 
-# Install uv
-RUN pip install --no-cache-dir uv
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv with faster mirror
+RUN pip install --no-cache-dir --index-url https://pypi.tuna.tsinghua.edu.cn/simple uv
 
 WORKDIR /app
 
 # Copy dependency files first (for layer caching)
 COPY backend/requirements.txt ./backend/
 
-# Install backend dependencies
-RUN cd backend && uv pip install --system --no-cache -r requirements.txt
+# Install backend dependencies with faster mirror
+RUN cd backend && uv pip install --system --no-cache --index-url https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
 # Copy backend code
 COPY backend/ ./backend/
