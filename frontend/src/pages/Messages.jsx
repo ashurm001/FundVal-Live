@@ -108,8 +108,9 @@ const Messages = () => {
       date = new Date(dateStr);
     } else {
       // 无时区的日期字符串，假设为UTC时间，需要转换为本地时间
-      // 直接使用toLocaleString处理时区转换
-      date = new Date(dateStr.replace(/-/g, '/'));
+      // 先解析为UTC时间，然后转换为本地时间
+      const parts = dateStr.split(/[- :]/);
+      date = new Date(Date.UTC(parts[0], parts[1]-1, parts[2], parts[3], parts[4], parts[5]));
     }
     
     const now = new Date();
