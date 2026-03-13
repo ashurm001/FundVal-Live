@@ -47,24 +47,6 @@ const Messages = () => {
   }, []);
 
   const handleViewMessage = useCallback(async (msg) => {
-    // 检查缓存
-    if (messageCache[msg.id]) {
-      setSelectedMessage(messageCache[msg.id]);
-      
-      // Mark as read if needed
-      if (!msg.read) {
-        try {
-          await markMessageAsRead(msg.id);
-          setMessages(prev => 
-            prev.map(m => m.id === msg.id ? { ...m, read: true } : m)
-          );
-        } catch (err) {
-          console.error('Failed to mark as read', err);
-        }
-      }
-      return;
-    }
-
     setDetailLoading(true);
     try {
       const data = await getMessage(msg.id);
