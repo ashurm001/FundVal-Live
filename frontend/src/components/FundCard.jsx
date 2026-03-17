@@ -72,7 +72,13 @@ export const FundCard = ({ fund, onClick, onRemove, onSubscribe }) => {
       <div className="mt-4 pt-3 border-t border-slate-50 flex justify-between items-center pointer-events-none">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Clock className="w-3 h-3" />
-          {fund.time || '--:--'}
+          {(() => {
+            if (!fund.time) return '--:--';
+            // 处理时间字符串，转换为本地时间
+            const parts = fund.time.split(/[- :]/);
+            const utcDate = new Date(Date.UTC(parts[0], parts[1]-1, parts[2], parts[3], parts[4], parts[5]));
+            return utcDate.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          })()}
         </div>
       </div>
       
