@@ -41,6 +41,14 @@ const CryptoAccount = ({ currentAccount = 1 }) => {
     fetchData();
   }, [currentAccount]);
 
+  // 自动刷新价格，每5分钟一次
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleUpdatePrices();
+    }, 300000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleAddPosition = async () => {
     if (!formData.symbol || !formData.name || !formData.cost || !formData.amount) return;
 

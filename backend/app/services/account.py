@@ -27,11 +27,13 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
     position_map = {row["code"]: row for row in rows}
     
     with ThreadPoolExecutor(max_workers=10) as executor:
+        # 为非CASH代码创建线程
         future_to_code = {
             executor.submit(get_combined_valuation, code): code 
-            for code in position_map.keys()
+            for code in position_map.keys() if code != 'CASH'
         }
         
+        # 处理非CASH代码
         for future in as_completed(future_to_code):
             code = future_to_code[future]
             row = position_map[code]
@@ -166,7 +168,6 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                 total_cost += cost_basis
                 # accumulated income sum not strictly needed for top card but good to have?
                 # Let's keep total_income as the projected total.
-
             except TimeoutError:
                 logger.warning(f"Timeout fetching valuation for {code}")
                 positions.append({
@@ -203,19 +204,126 @@ def get_all_positions(account_id: int = 1) -> Dict[str, Any]:
                     "is_est_valid": False,
                     "update_time": "--"
                 })
+    
+    # 单独处理CASH代码
+    if 'CASH' in position_map:
+        row = position_map['CASH']
+        try:
+            cost = float(row["cost"])
+            shares = float(row["shares"])
+            cost_basis = cost * shares
+            
+            # 现金账户的价值就是份额（因为成本是1.0）
+            actual_market_value = shares
+            latest_nav = 1.0
+            day_income = 0.0
+            day_income_from_nav = 0.0
+            total_income = 0.0
+            total_return_rate = 0.0
+            name = '现金账户'
+            fund_type = '现金'
+            
+            positions.append({
+                "code": 'CASH',
+                "name": name,
+                "type": fund_type,
+                "cost": cost,
+                "shares": shares,
+                "nav": 1.0,
+                "latest_nav": latest_nav,
+                "nav_date": "--",
+                "nav_updated_today": False,
+                "estimate": 1.0,
+                "est_rate": 0.0,
+                "is_est_valid": True,
+                
+                # Values
+                "cost_basis": round(cost_basis, 2),
+                "nav_market_value": round(actual_market_value, 2),
+                "est_market_value": round(actual_market_value, 2),
+                "actual_market_value": round(actual_market_value, 2),  # 基于实际净值的市值
+                
+                # PnL
+                "accumulated_income": round(total_income, 2),
+                "accumulated_return_rate": round(total_return_rate, 2),
+                
+                "day_income": round(day_income, 2),
+                "day_income_from_nav": round(day_income_from_nav, 2),
+                "total_income": round(total_income, 2),
+                "total_return_rate": round(total_return_rate, 2),
+                
+                "update_time": "--"
+            })
+            
+            # 现金账户不计入基金总市值和成本
+            total_actual_market_value += actual_market_value
+            total_cost += cost_basis
+        except Exception as e:
+            logger.error(f"Error processing position CASH: {e}")
+            positions.append({
+                "code": 'CASH',
+                "name": "现金账户",
+                "type": "现金",
+                "cost": 1.0,
+                "shares": 0.0,
+                "nav": 1.0,
+                "latest_nav": 1.0,
+                "nav_date": "--",
+                "nav_updated_today": False,
+                "estimate": 1.0,
+                "est_rate": 0.0,
+                "is_est_valid": True,
+                
+                # Values
+                "cost_basis": 0.0,
+                "nav_market_value": 0.0,
+                "est_market_value": 0.0,
+                "actual_market_value": 0.0,
+                
+                # PnL
+                "accumulated_income": 0.0,
+                "accumulated_return_rate": 0.0,
+                "day_income": 0.0,
+                "day_income_from_nav": 0.0,
+                "total_income": 0.0,
+                "total_return_rate": 0.0,
+                
+                "update_time": "--"
+            })
 
+    # 处理现金账户
+    cash_amount = 0.0
+    cash_position = None
+    filtered_positions = []
+    
+    for pos in positions:
+        if pos.get("code") == "CASH":
+            # 现金账户的价值就是份额（因为成本是1.0）
+            cash_amount = pos.get("actual_market_value", 0.0)
+            cash_position = pos
+        else:
+            filtered_positions.append(pos)
+    
+    # 从总市值和总成本中扣除现金账户
+    total_actual_market_value -= cash_amount
+    total_cost -= cash_amount
     total_income = total_actual_market_value - total_cost
     total_return_rate = (total_income / total_cost * 100) if total_cost > 0 else 0.0
 
+    # 如果有现金账户，添加到positions列表
+    if cash_position:
+        filtered_positions.append(cash_position)
+
     return {
         "summary": {
-            "total_market_value": round(total_actual_market_value, 2), # 实际总资产（基于实际净值）
-            "total_cost": round(total_cost, 2),
+            "total_market_value": round(total_actual_market_value + cash_amount, 2), # 实际总资产（基于实际净值）
+            "total_cost": round(total_cost + cash_amount, 2),
             "total_day_income": round(total_day_income, 2),
             "total_income": round(total_income, 2),
-            "total_return_rate": round(total_return_rate, 2)
+            "total_return_rate": round(total_return_rate, 2),
+            "cash": round(cash_amount, 2)
         },
-        "positions": sorted(positions, key=lambda x: x["actual_market_value"], reverse=True)
+        "positions": sorted(filtered_positions, key=lambda x: x["actual_market_value"], reverse=True)
     }
 
 def upsert_position(account_id: int, code: str, cost: float, shares: float):

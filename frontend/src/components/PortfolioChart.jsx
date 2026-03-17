@@ -25,12 +25,20 @@ const getRateColor = (rate) => {
   return 'text-slate-500';
 };
 
-export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
+export const PortfolioChart = ({ positions, summary, loading, onRefresh, onCashEdit }) => {
   if (!positions || positions.length === 0) return null;
 
   const dataMap = {};
 
+  // 处理现金账户
+  if (summary.cash && summary.cash > 0) {
+    dataMap["现金"] = summary.cash;
+  }
+
   positions.forEach(p => {
+    // 跳过现金账户，因为已经单独处理
+    if (p.code === 'CASH') return;
+    
     let type = p.type || "未知";
 
     // Map to major categories
@@ -79,32 +87,55 @@ export const PortfolioChart = ({ positions, summary, loading, onRefresh }) => {
       {/* PC端：左右布局 | 移动端：上下布局 */}
       <div className="flex flex-col md:flex-row gap-4">
         {/* 左侧：统计数据 */}
-        <div className="w-full md:w-1/2 grid grid-cols-2 gap-2">
-          <div className="bg-slate-50 p-2 rounded-lg">
-            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">实际总资产</div>
-            <div className="text-lg font-bold text-slate-800">
-              ¥{(summary?.total_market_value || 0).toLocaleString()}
+        <div className="w-full md:w-1/2 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-slate-50 p-2 rounded-lg">
+              <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">实际总资产</div>
+              <div className="text-lg font-bold text-slate-800">
+                ¥{(summary?.total_market_value || 0).toLocaleString()}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-2 rounded-lg">
+              <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">累计盈利</div>
+              <div className={`text-lg font-bold ${getRateColor(summary?.total_income || 0)}`}>
+                {(summary?.total_income || 0) > 0 ? '+' : ''}¥{(summary?.total_income || 0).toLocaleString()}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-2 rounded-lg">
+              <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">当日实际盈亏</div>
+              <div className={`text-lg font-bold ${getRateColor(positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0))}`}>
+                {(positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0)) > 0 ? '+' : ''}¥{positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0).toLocaleString()}
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-2 rounded-lg">
+              <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">当日预估盈亏</div>
+              <div className={`text-lg font-bold ${getRateColor(summary?.total_day_income || 0)}`}>
+                {(summary?.total_day_income || 0) > 0 ? '+' : ''}¥{(summary?.total_day_income || 0).toLocaleString()}
+              </div>
             </div>
           </div>
-
-          <div className="bg-slate-50 p-2 rounded-lg">
-            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">累计盈利</div>
-            <div className={`text-lg font-bold ${getRateColor(summary?.total_income || 0)}`}>
-              {(summary?.total_income || 0) > 0 ? '+' : ''}¥{(summary?.total_income || 0).toLocaleString()}
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-2 rounded-lg">
-            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">当日实际盈亏</div>
-            <div className={`text-lg font-bold ${getRateColor(positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0))}`}>
-              {(positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0)) > 0 ? '+' : ''}¥{positions.reduce((total, pos) => total + (pos.day_income_from_nav || 0), 0).toLocaleString()}
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-2 rounded-lg">
-            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">当日预估盈亏</div>
-            <div className={`text-lg font-bold ${getRateColor(summary?.total_day_income || 0)}`}>
-              {(summary?.total_day_income || 0) > 0 ? '+' : ''}¥{(summary?.total_day_income || 0).toLocaleString()}
+          
+          {/* 现金账户 */}
+          <div className="bg-blue-50 p-2 rounded-lg border border-blue-100">
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="text-[10px] text-blue-500 font-medium uppercase tracking-wider">现金账户</div>
+                <div className="text-lg font-bold text-blue-800">
+                  ¥{(summary?.cash || 0).toLocaleString()}
+                </div>
+              </div>
+              <button 
+                className="text-blue-600 hover:text-blue-800 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
+                onClick={() => onCashEdit && onCashEdit()}
+                title="编辑现金账户"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>

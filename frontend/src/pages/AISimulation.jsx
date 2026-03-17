@@ -160,6 +160,30 @@ const AISimulation = () => {
     }
   };
 
+  // 处理现金账户编辑
+  const handleCashEdit = () => {
+    if (!selectedAccount) return;
+    
+    const cashAmount = prompt('请输入现金账户金额:', accountDetail.cash || 0);
+    if (cashAmount !== null) {
+      const amount = parseFloat(cashAmount);
+      if (!isNaN(amount) && amount >= 0) {
+        // 调用API更新现金账户
+        aiSimulationApi.updatePosition(selectedAccount.id, {
+          code: 'CASH',
+          name: '现金账户',
+          asset_type: 'cash',
+          cost: 1.0,
+          shares: amount
+        }).then(() => {
+          fetchAccountDetail(selectedAccount.id);
+        }).catch(() => {
+          alert('保存失败');
+        });
+      }
+    }
+  };
+
   const handleCreateAccount = async () => {
     if (!createForm.source_account_id) {
       alert('请选择源账户');
@@ -668,9 +692,22 @@ const AISimulation = () => {
                   {accountDetail.total_return_rate >= 0 ? '+' : ''}{accountDetail.total_return_rate?.toFixed(2)}%
                 </div>
               </div>
-              <div className="bg-slate-50 rounded-lg p-3">
-                <div className="text-xs text-slate-500 mb-1">现金账户</div>
-                <div className="text-lg font-bold text-slate-800">{getCurrencySymbol()}{accountDetail.cash?.toLocaleString()}</div>
+              <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-xs text-blue-500 mb-1">现金账户</div>
+                    <div className="text-lg font-bold text-blue-800">{getCurrencySymbol()}{accountDetail.cash?.toLocaleString()}</div>
+                  </div>
+                  <button 
+                    className="text-blue-600 hover:text-blue-800 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
+                    onClick={() => handleCashEdit()}
+                    title="编辑现金账户"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <div className="text-xs text-slate-500 mb-1">用户市值</div>

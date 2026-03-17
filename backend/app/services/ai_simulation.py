@@ -1277,6 +1277,76 @@ class AISimulationService:
         
         return {"error": "更新失败：数据库锁定"}
 
+    def upsert_ai_position(self, ai_account_id: int, code: str, name: str, asset_type: str, cost: float, shares: float) -> Dict[str, Any]:
+        """更新或插入AI账户持仓
+        
+        Args:
+            ai_account_id: AI账户ID
+            code: 资产代码
+            name: 资产名称
+            asset_type: 资产类型
+            cost: 成本
+            shares: 份额
+        """
+        import time
+        
+        max_retries = 3
+        retry_delay = 0.1
+        
+        for attempt in range(max_retries):
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            try:
+                # 计算市值
+                market_value = shares * cost if code != 'CASH' else shares
+                
+                # 插入或更新持仓
+                cursor.execute("""
+                    INSERT OR REPLACE INTO ai_simulation_positions
+                    (ai_account_id, code, name, asset_type, cost, shares, current_price, market_value, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (ai_account_id, code, name, asset_type, cost, shares, cost, market_value, self._get_local_time().strftime("%Y-%m-%d %H:%M:%S")))
+                
+                # 重新计算权重
+                cursor.execute("""
+                    SELECT SUM(market_value) FROM ai_simulation_positions WHERE ai_account_id = ?
+                """, (ai_account_id,))
+                total_value = cursor.fetchone()[0] or 0
+                
+                if total_value > 0:
+                    cursor.execute("""
+                        UPDATE ai_simulation_positions
+                        SET weight = (market_value / ?) * 100
+                        WHERE ai_account_id = ?
+                    """, (total_value, ai_account_id))
+                
+                # 更新账户当前价值
+                cursor.execute("""
+                    UPDATE ai_simulation_accounts
+                    SET current_value = ?
+                    WHERE id = ?
+                """, (total_value, ai_account_id))
+                
+                conn.commit()
+                
+                # 使缓存失效
+                self.invalidate_cache()
+                
+                return {"success": True, "message": "持仓更新成功"}
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    conn.close()
+                    time.sleep(retry_delay * (attempt + 1))
+                    continue
+                else:
+                    raise
+            finally:
+                conn.close()
+        
+        return {"error": "更新失败：数据库锁定"}
+
+
     def delete_ai_account(self, ai_account_id: int) -> Dict[str, Any]:
         """删除AI模拟账户"""
         conn = get_db_connection()

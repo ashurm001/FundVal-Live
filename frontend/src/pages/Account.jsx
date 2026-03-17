@@ -183,6 +183,26 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
     }
   };
 
+  // 处理现金账户编辑
+  const handleCashEdit = () => {
+    const cashAmount = prompt('请输入现金账户金额:', summary.cash || 0);
+    if (cashAmount !== null) {
+      const amount = parseFloat(cashAmount);
+      if (!isNaN(amount) && amount >= 0) {
+        // 调用API更新现金账户
+        updatePosition({
+          code: 'CASH',
+          cost: 1.0,
+          shares: amount
+        }, currentAccount).then(() => {
+          fetchData();
+        }).catch(() => {
+          alert('保存失败');
+        });
+      }
+    }
+  };
+
   const handleDelete = async (code) => {
     if (!confirm(`确定删除 ${code} 吗？`)) return;
     try {
@@ -315,7 +335,7 @@ const Account = ({ currentAccount = 1, onSelectFund, onPositionChange, onSyncWat
         </div>
       ) : (
         <div className="w-full">
-          <PortfolioChart positions={positions} summary={summary} loading={loading} onRefresh={fetchData} />
+          <PortfolioChart positions={positions} summary={summary} loading={loading} onRefresh={fetchData} onCashEdit={handleCashEdit} />
         </div>
       )}
 
