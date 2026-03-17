@@ -1113,7 +1113,7 @@ class AISimulationService:
                     # 创建消息
                     message_service.create_message({
                         "msg_type": "ai_review",
-                        "title": f"AI审视报告 - {now.strftime('%Y-%m-%d')}",
+                        "title": f"{account[1]} - AI审视报告 - {now.strftime('%Y-%m-%d')}",
                         "content": full_report,
                         "summary": f"AI账户收益率: {ai_return_rate:.2f}%, 用户账户收益率: {source_return_rate:.2f}%, 执行交易: {executed_count}笔",
                         "risk_level": "normal",
