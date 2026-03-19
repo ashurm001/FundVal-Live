@@ -1170,39 +1170,15 @@ class AISimulationService:
 
             # 获取源账户当前价值（根据类型）
             if source_type == 'crypto':
-                # 数字货币账户价值计算 - 包含USDT现金账户
-                cursor.execute("""
-                    SELECT SUM(
-                        CASE 
-                            WHEN cp.symbol = 'USDT' THEN cp.amount
-                            ELSE cp.amount * COALESCE(cpr.price_usd, 0)
-                        END
-                    ) as total_value
-                    FROM crypto_positions cp
-                    LEFT JOIN crypto_prices cpr ON cp.symbol = cpr.symbol
-                    WHERE cp.account_id = ?
-                """, (source_account_id,))
+                # 数字货币账户价值计算 - 使用get_all_crypto_positions获取准确价值
+                from .crypto import get_all_crypto_positions
+                account_data = get_all_crypto_positions(source_account_id)
+                source_value = account_data.get("summary", {}).get("total_market_value", 0.0)
             else:
-                # 源账户价值计算 - 包含基金持仓和现金账户
-                cursor.execute("""
-                    SELECT SUM(
-                        CASE 
-                            WHEN p.code = 'CASH' THEN p.shares
-                            ELSE p.shares * COALESCE(
-                                (SELECT COALESCE(published_nav, estimate, 0)
-                                 FROM fund_nav_estimation
-                                 WHERE code = p.code
-                                 AND (published_nav IS NOT NULL OR estimate IS NOT NULL)
-                                 ORDER BY date DESC
-                                 LIMIT 1
-                            ), 0)
-                        END
-                    ) as total_value
-                    FROM positions p
-                    WHERE p.account_id = ?
-                """, (source_account_id,))
-            result = cursor.fetchone()
-            source_value = result[0] if result and result[0] else 0
+                # 基金账户价值计算 - 使用get_all_positions获取准确价值
+                from .account import get_all_positions
+                account_data = get_all_positions(source_account_id)
+                source_value = account_data.get("summary", {}).get("total_market_value", 0.0)
 
             # 计算收益率
             ai_return_rate = ((ai_value - initial_capital) / initial_capital * 100) if initial_capital > 0 else 0
