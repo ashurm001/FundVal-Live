@@ -33,6 +33,7 @@ export const PortfolioAiAnalysis = ({ positions, summary }) => {
           total_income: pos.total_income,
           total_return_rate: pos.total_return_rate,
           actual_market_value: pos.actual_market_value,
+          is_cash: pos.code === 'CASH', // 标记是否为现金账户
         })),
         summary: {
           total_market_value: summary?.total_market_value || 0,
@@ -40,6 +41,7 @@ export const PortfolioAiAnalysis = ({ positions, summary }) => {
           total_income: summary?.total_income || 0,
           total_return_rate: summary?.total_return_rate || 0,
           total_day_income: summary?.total_day_income || 0,
+          cash: summary?.cash || 0, // 包含现金账户
         }
       };
 

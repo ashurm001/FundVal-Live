@@ -28,6 +28,7 @@ export const CryptoAiAnalysis = ({ positions, summary }) => {
           total_income: pos.total_income,
           total_return_rate: pos.total_return_rate,
           day_income: pos.day_income,
+          is_cash: pos.is_cash || false, // 标记是否为现金账户
         })),
         summary: {
           total_market_value: summary?.total_market_value || 0,
@@ -35,6 +36,7 @@ export const CryptoAiAnalysis = ({ positions, summary }) => {
           total_income: summary?.total_income || 0,
           total_return_rate: summary?.total_return_rate || 0,
           total_day_income: summary?.total_day_income || 0,
+          usdt_cash: summary?.usdt_cash || 0, // 包含USDT现金账户
         },
         type: 'crypto' // 标记为数字货币类型
       };

@@ -155,6 +155,26 @@ const CryptoAccount = ({ currentAccount = 1 }) => {
     }
   };
 
+  const handleUsdtEdit = () => {
+    const usdtAmount = prompt('请输入USDT现金账户金额:', data.summary.usdt_cash || 0);
+    if (usdtAmount !== null) {
+      const amount = parseFloat(usdtAmount);
+      if (!isNaN(amount) && amount >= 0) {
+        // 调用API更新USDT现金账户
+        updateCryptoPosition('USDT', {
+          symbol: 'USDT',
+          name: 'USDT现金',
+          cost: 1.0,
+          amount: amount
+        }, currentAccount).then(() => {
+          fetchData();
+        }).catch(() => {
+          alert('保存失败');
+        });
+      }
+    }
+  };
+
   const openAddModal = () => {
     setEditingPos(null);
     setFormData({ symbol: '', name: '', cost: '', amount: '' });
@@ -271,6 +291,25 @@ const getRateBgColor = (rate) => {
               <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">24h盈亏</div>
               <div className={`text-lg font-bold ${getRateColor(data.summary.total_day_income || 0)}`}>
                 {(data.summary.total_day_income || 0) > 0 ? '+' : ''}${(data.summary.total_day_income || 0).toLocaleString()}
+              </div>
+            </div>
+            
+            {/* USDT现金账户 */}
+            <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 col-span-2">
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="text-[10px] text-blue-500 font-medium uppercase tracking-wider">USDT现金账户</div>
+                  <div className="text-lg font-bold text-blue-800">
+                    ${(data.summary.usdt_cash || 0).toLocaleString()}
+                  </div>
+                </div>
+                <button 
+                  className="text-blue-600 hover:text-blue-800 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
+                  onClick={handleUsdtEdit}
+                  title="编辑USDT现金账户"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>

@@ -335,6 +335,10 @@ class AIService:
         total_cost = summary.get("total_cost", 0)
         total_income = summary.get("total_income", 0)
         total_return_rate = summary.get("total_return_rate", 0)
+        
+        # 获取现金账户金额
+        usdt_cash = summary.get("usdt_cash", 0)
+        cash = summary.get("cash", 0)
 
         # Check if this is crypto portfolio (has 'symbol' field) or fund portfolio (has 'code' field)
         is_crypto = positions and "symbol" in positions[0] if positions else False
@@ -342,6 +346,10 @@ class AIService:
         # Group by type (fund type or crypto)
         type_allocation = {}
         for pos in positions:
+            # 跳过现金账户（单独处理）
+            if pos.get("is_cash", False):
+                continue
+                
             if is_crypto:
                 # For crypto, group by "数字货币"
                 asset_type = "数字货币"
@@ -356,6 +364,18 @@ class AIService:
             market_value = pos.get("market_value", pos.get("actual_market_value", 0))
             type_allocation[asset_type]["value"] += market_value
             type_allocation[asset_type]["count"] += 1
+        
+        # 添加现金账户到类型分配
+        if is_crypto and usdt_cash > 0:
+            if "USDT现金" not in type_allocation:
+                type_allocation["USDT现金"] = {"value": 0, "count": 0}
+            type_allocation["USDT现金"]["value"] += usdt_cash
+            type_allocation["USDT现金"]["count"] += 1
+        elif not is_crypto and cash > 0:
+            if "现金" not in type_allocation:
+                type_allocation["现金"] = {"value": 0, "count": 0}
+            type_allocation["现金"]["value"] += cash
+            type_allocation["现金"]["count"] += 1
 
         # Calculate percentages
         for asset_type in type_allocation:

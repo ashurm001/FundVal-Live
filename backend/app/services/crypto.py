@@ -371,6 +371,8 @@ def get_all_crypto_positions(account_id: int = 1) -> Dict[str, Any]:
             total_market_value = 0.0
             total_cost = 0.0
             total_day_income = 0.0
+            usdt_cash = 0.0  # USDT现金账户金额
+            usdt_position = None  # USDT现金账户持仓对象
             
             if not rows:
                 return {
@@ -380,7 +382,8 @@ def get_all_crypto_positions(account_id: int = 1) -> Dict[str, Any]:
                         "total_income": 0.0,
                         "total_return_rate": 0.0,
                         "total_day_income": 0.0,
-                        "position_count": 0
+                        "position_count": 0,
+                        "usdt_cash": 0.0
                     },
                     "positions": []
                 }
@@ -404,6 +407,27 @@ def get_all_crypto_positions(account_id: int = 1) -> Dict[str, Any]:
                 name = row["name"]
                 cost = float(row["cost"])
                 amount = float(row["amount"])
+                
+                # 处理USDT现金账户
+                if symbol == "USDT":
+                    usdt_cash = amount
+                    usdt_position = {
+                        "id": row["id"],
+                        "symbol": "USDT",
+                        "name": "USDT现金",
+                        "cost": 1.0,
+                        "amount": amount,
+                        "current_price": 1.0,
+                        "market_value": round(amount, 2),
+                        "cost_basis": round(amount, 2),
+                        "income": 0.0,
+                        "return_rate": 0.0,
+                        "day_income": 0.0,
+                        "change_24h": 0.0,
+                        "updated_at": row["updated_at"],
+                        "is_cash": True  # 标记为现金账户
+                    }
+                    continue
                 
                 # 获取当前价格（使用美元价格）
                 price_data = prices.get(symbol, {})
@@ -437,6 +461,14 @@ def get_all_crypto_positions(account_id: int = 1) -> Dict[str, Any]:
                 total_cost += cost_basis
                 total_day_income += day_income
             
+            # 将USDT现金账户添加到持仓列表
+            if usdt_position:
+                positions.append(usdt_position)
+            
+            # 总资产包含USDT现金
+            total_market_value += usdt_cash
+            total_cost += usdt_cash
+            
             total_income = total_market_value - total_cost
             total_return_rate = (total_income / total_cost * 100) if total_cost > 0 else 0.0
             
@@ -447,7 +479,8 @@ def get_all_crypto_positions(account_id: int = 1) -> Dict[str, Any]:
                     "total_income": round(total_income, 2),
                     "total_return_rate": round(total_return_rate, 2),
                     "total_day_income": round(total_day_income, 2),
-                    "position_count": len(positions)
+                    "position_count": len(positions),
+                    "usdt_cash": round(usdt_cash, 2)
                 },
                 "positions": positions
             }
@@ -556,21 +589,35 @@ def execute_crypto_trade(account_id: int, symbol: str, op_type: str, amount: flo
         if not trade_time:
             trade_time = datetime.now().isoformat()
         
-        total_cny = amount * price
+        total_usd = amount * price  # 交易总金额（美元）
         
         conn = get_db_connection()
         try:
             cursor = conn.cursor()
             
-            # 记录交易
+            # 检查USDT现金账户余额
             cursor.execute("""
-                INSERT INTO crypto_transactions (account_id, symbol, op_type, amount, price, total_cny, trade_time)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (account_id, symbol.upper(), op_type, amount, price, total_cny, trade_time))
+                SELECT amount FROM crypto_positions
+                WHERE account_id = ? AND symbol = 'USDT'
+            """, (account_id,))
+            usdt_row = cursor.fetchone()
+            usdt_balance = usdt_row["amount"] if usdt_row else 0.0
             
             # 更新持仓
             if op_type == "buy":
-                # 买入：增加持仓，更新成本价
+                # 买入：检查USDT余额是否足够
+                if usdt_balance < total_usd:
+                    logger.error(f"Insufficient USDT balance: {usdt_balance} < {total_usd}")
+                    return False
+                
+                # 从USDT现金账户扣除金额
+                cursor.execute("""
+                    UPDATE crypto_positions
+                    SET amount = amount - ?
+                    WHERE account_id = ? AND symbol = 'USDT'
+                """, (total_usd, account_id))
+                
+                # 增加持仓，更新成本价
                 cursor.execute("""
                     INSERT INTO crypto_positions (account_id, symbol, name, cost, amount)
                     VALUES (?, ?, ?, ?, ?)
@@ -581,16 +628,42 @@ def execute_crypto_trade(account_id: int, symbol: str, op_type: str, amount: flo
                 """, (account_id, symbol.upper(), symbol, price, amount, price, amount, amount, amount))
             
             elif op_type == "sell":
-                # 卖出：减少持仓
+                # 检查持仓是否足够
+                cursor.execute("""
+                    SELECT amount FROM crypto_positions
+                    WHERE account_id = ? AND symbol = ?
+                """, (account_id, symbol.upper()))
+                position_row = cursor.fetchone()
+                position_amount = position_row["amount"] if position_row else 0.0
+                
+                if position_amount < amount:
+                    logger.error(f"Insufficient position: {position_amount} < {amount}")
+                    return False
+                
+                # 减少持仓
                 cursor.execute("""
                     UPDATE crypto_positions
-                    SET amount = amount - ?,
-                        updated_at = CURRENT_TIMESTAMP
+                    SET amount = amount - ?
                     WHERE account_id = ? AND symbol = ?
                 """, (amount, account_id, symbol.upper()))
+                
+                # 将金额加到USDT现金账户
+                cursor.execute("""
+                    INSERT INTO crypto_positions (account_id, symbol, name, cost, amount)
+                    VALUES (?, 'USDT', 'USDT现金', 1.0, ?)
+                    ON CONFLICT(account_id, symbol) DO UPDATE SET
+                        amount = amount + ?,
+                        updated_at = CURRENT_TIMESTAMP
+                """, (account_id, total_usd, total_usd))
+            
+            # 记录交易
+            cursor.execute("""
+                INSERT INTO crypto_transactions (account_id, symbol, op_type, amount, price, total_cny, trade_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (account_id, symbol.upper(), op_type, amount, price, total_usd, trade_time))
             
             conn.commit()
-            logger.info(f"Executed crypto trade: {op_type} {amount} {symbol} at {price}")
+            logger.info(f"Executed crypto trade: {op_type} {amount} {symbol} at {price}, total_usd: {total_usd}")
             return True
         
         finally:
