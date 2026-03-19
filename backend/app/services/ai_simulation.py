@@ -462,9 +462,9 @@ class AISimulationService:
                     SELECT record_date, ai_value, source_value, ai_return_rate, source_return_rate, outperformance
                     FROM ai_simulation_value_history
                     WHERE ai_account_id = ?
-                    AND record_date >= date('now', '-{} days')
+                    AND record_date >= date('now', '-' || ? || ' days')
                     ORDER BY record_date ASC
-                """.format(history_days), (ai_account_id,))
+                """, (ai_account_id, history_days))
                 value_history = []
                 for hist in cursor.fetchall():
                     value_history.append({
@@ -1170,8 +1170,14 @@ class AISimulationService:
 
             # 获取源账户当前价值（根据类型）
             if source_type == 'crypto':
+                # 数字货币账户价值计算 - 包含USDT现金账户
                 cursor.execute("""
-                    SELECT SUM(cp.amount * COALESCE(cpr.price_usd, 0)) as total_value
+                    SELECT SUM(
+                        CASE 
+                            WHEN cp.symbol = 'USDT' THEN cp.amount
+                            ELSE cp.amount * COALESCE(cpr.price_usd, 0)
+                        END
+                    ) as total_value
                     FROM crypto_positions cp
                     LEFT JOIN crypto_prices cpr ON cp.symbol = cpr.symbol
                     WHERE cp.account_id = ?

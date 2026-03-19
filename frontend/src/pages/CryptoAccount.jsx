@@ -1,10 +1,84 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { Plus, X, Edit2, Trash2, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getCryptoPositions, createCryptoPosition, updateCryptoPosition, deleteCryptoPosition, buyCrypto, sellCrypto, updateCryptoPrices } from '../services/api';
 import { CryptoAiAnalysis } from '../components/CryptoAiAnalysis';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
+
+const CryptoPositionRow = memo(({ pos, getRateColor, getRateBgColor, setTradePos, setBuyModalOpen, setSellModalOpen, setTradeData, openEditModal, handleDeletePosition }) => {
+  return (
+    <tr className="hover:bg-slate-50 transition-colors">
+      <td className="px-4 py-3">
+        <div>
+          <div className="font-bold text-slate-800">{pos.symbol}</div>
+          <div className="text-xs text-slate-400">{pos.name}</div>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="font-mono text-slate-800">{pos.amount.toFixed(4)}</div>
+        <div className="text-xs text-slate-500">${pos.cost.toFixed(2)}</div>
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="font-mono text-slate-800">${pos.current_price.toFixed(4)}</div>
+        <div className={`text-xs ${getRateColor(pos.change_24h)}`}>
+          {pos.change_24h >= 0 ? '+' : ''}{pos.change_24h.toFixed(2)}%
+        </div>
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="font-mono text-slate-800">${pos.market_value.toLocaleString()}</div>
+        <div className={`text-xs ${getRateColor(pos.return_rate)}`}>
+          ${pos.income.toLocaleString()}
+        </div>
+      </td>
+      <td className={`px-4 py-3 text-right ${getRateColor(pos.return_rate)}`}>
+        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getRateBgColor(pos.return_rate)}`}>
+          {pos.return_rate >= 0 ? '+' : ''}{pos.return_rate.toFixed(2)}%
+        </span>
+      </td>
+      <td className="px-4 py-3 text-center">
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => {
+              setTradePos(pos);
+              setBuyModalOpen(true);
+              setTradeData({ amount: '', price: pos.current_price });
+            }}
+            className="p-1 text-green-600 hover:bg-green-50 rounded"
+            title="买入"
+          >
+            <TrendingUp size={16} />
+          </button>
+          <button
+            onClick={() => {
+              setTradePos(pos);
+              setSellModalOpen(true);
+              setTradeData({ amount: '', price: pos.current_price });
+            }}
+            className="p-1 text-red-600 hover:bg-red-50 rounded"
+            title="卖出"
+          >
+            <TrendingDown size={16} />
+          </button>
+          <button
+            onClick={() => openEditModal(pos)}
+            className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+            title="编辑"
+          >
+            <Edit2 size={16} />
+          </button>
+          <button
+            onClick={() => handleDeletePosition(pos.symbol)}
+            className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+            title="删除"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
 
 const CryptoAccount = ({ currentAccount = 1 }) => {
   const [data, setData] = useState({ summary: {}, positions: [] });
@@ -204,11 +278,16 @@ const getRateBgColor = (rate) => {
   return 'bg-gray-100 text-gray-800';
 };
 
-  // 币种分布数据
-  const cryptoDistributionData = data.positions.map(pos => ({
-    name: pos.symbol,
-    value: pos.market_value
-  })).sort((a, b) => b.value - a.value);
+  // 币种分布数据（使用useMemo优化性能）
+  const cryptoDistributionData = useMemo(() => {
+    return data.positions
+      .filter(pos => !pos.is_cash) // 过滤掉现金账户
+      .map(pos => ({
+        name: pos.symbol,
+        value: pos.market_value
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [data.positions]);
 
   // 自定义标签渲染
   const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
@@ -398,75 +477,18 @@ const getRateBgColor = (rate) => {
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-base">
                     {data.positions.map((pos) => (
-                      <tr key={pos.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div>
-                            <div className="font-bold text-slate-800">{pos.symbol}</div>
-                            <div className="text-xs text-slate-400">{pos.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="font-mono text-slate-800">{pos.amount.toFixed(4)}</div>
-                          <div className="text-xs text-slate-500">${pos.cost.toFixed(2)}</div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="font-mono text-slate-800">${pos.current_price.toFixed(4)}</div>
-                          <div className={`text-xs ${getRateColor(pos.change_24h)}`}>
-                            {pos.change_24h >= 0 ? '+' : ''}{pos.change_24h.toFixed(2)}%
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="font-mono text-slate-800">${pos.market_value.toLocaleString()}</div>
-                          <div className={`text-xs ${getRateColor(pos.return_rate)}`}>
-                            ${pos.income.toLocaleString()}
-                          </div>
-                        </td>
-                        <td className={`px-4 py-3 text-right ${getRateColor(pos.return_rate)}`}>
-                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${getRateBgColor(pos.return_rate)}`}>
-                            {pos.return_rate >= 0 ? '+' : ''}{pos.return_rate.toFixed(2)}%
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => {
-                                setTradePos(pos);
-                                setBuyModalOpen(true);
-                                setTradeData({ amount: '', price: pos.current_price });
-                              }}
-                              className="p-1 text-green-600 hover:bg-green-50 rounded"
-                              title="买入"
-                            >
-                              <TrendingUp size={16} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setTradePos(pos);
-                                setSellModalOpen(true);
-                                setTradeData({ amount: '', price: pos.current_price });
-                              }}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded"
-                              title="卖出"
-                            >
-                              <TrendingDown size={16} />
-                            </button>
-                            <button
-                              onClick={() => openEditModal(pos)}
-                              className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                              title="编辑"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePosition(pos.symbol)}
-                              className="p-1 text-gray-600 hover:bg-gray-100 rounded"
-                              title="删除"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                      <CryptoPositionRow 
+                        key={pos.id} 
+                        pos={pos} 
+                        getRateColor={getRateColor} 
+                        getRateBgColor={getRateBgColor} 
+                        setTradePos={setTradePos} 
+                        setBuyModalOpen={setBuyModalOpen} 
+                        setSellModalOpen={setSellModalOpen} 
+                        setTradeData={setTradeData} 
+                        openEditModal={openEditModal} 
+                        handleDeletePosition={handleDeletePosition} 
+                      />
                     ))}
                   </tbody>
                 </table>
