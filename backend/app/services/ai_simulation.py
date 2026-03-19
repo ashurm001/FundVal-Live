@@ -646,12 +646,15 @@ class AISimulationService:
                 else:
                     cursor.execute("""
                         SELECT p.code, f.name, p.cost, p.shares,
-                               COALESCE(fne.estimate, fne.published_nav, 0) as price
+                               CASE 
+                                   WHEN p.code = 'CASH' THEN 1.0
+                                   ELSE COALESCE(fne.estimate, fne.published_nav, 0)
+                               END as price
                         FROM positions p
                         LEFT JOIN funds f ON p.code = f.code
-                        LEFT JOIN fund_nav_estimation fne ON p.code = fne.code
+                        LEFT JOIN fund_nav_estimation fne ON p.code = fne.code AND p.code != 'CASH'
                         WHERE p.account_id = ?
-                        AND (fne.date = (SELECT MAX(date) FROM fund_nav_estimation WHERE code = p.code) OR fne.date IS NULL)
+                        AND (p.code = 'CASH' OR fne.date = (SELECT MAX(date) FROM fund_nav_estimation WHERE code = p.code) OR fne.date IS NULL)
                     """, (source_account_id,))
                     source_positions = cursor.fetchall()
                 
@@ -1174,16 +1177,21 @@ class AISimulationService:
                     WHERE cp.account_id = ?
                 """, (source_account_id,))
             else:
-                # 源账户价值计算 - 优先使用已发布的净值，其次使用估值
+                # 源账户价值计算 - 包含基金持仓和现金账户
                 cursor.execute("""
-                    SELECT SUM(p.shares * COALESCE(
-                        (SELECT COALESCE(published_nav, estimate, 0)
-                         FROM fund_nav_estimation
-                         WHERE code = p.code
-                         AND (published_nav IS NOT NULL OR estimate IS NOT NULL)
-                         ORDER BY date DESC
-                         LIMIT 1
-                    ), 0)) as total_value
+                    SELECT SUM(
+                        CASE 
+                            WHEN p.code = 'CASH' THEN p.shares
+                            ELSE p.shares * COALESCE(
+                                (SELECT COALESCE(published_nav, estimate, 0)
+                                 FROM fund_nav_estimation
+                                 WHERE code = p.code
+                                 AND (published_nav IS NOT NULL OR estimate IS NOT NULL)
+                                 ORDER BY date DESC
+                                 LIMIT 1
+                            ), 0)
+                        END
+                    ) as total_value
                     FROM positions p
                     WHERE p.account_id = ?
                 """, (source_account_id,))
