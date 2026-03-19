@@ -3,6 +3,7 @@ import re
 import json
 import sqlite3
 import datetime
+import logging
 from datetime import timezone, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 from langchain_openai import ChatOpenAI
@@ -12,6 +13,8 @@ from ..config import Config
 from ..db import get_db_connection
 from ..crypto import decrypt_value
 from .prompts import AI_PORTFOLIO_REVIEW_PROMPT
+
+logger = logging.getLogger(__name__)
 
 
 class AISimulationService:
@@ -1143,8 +1146,13 @@ class AISimulationService:
                 return {"error": str(e)}
 
 
-    def record_daily_value(self, ai_account_id: int):
-        """记录每日资产对比"""
+    def record_daily_value(self, ai_account_id: int, fill_missing_dates: bool = False):
+        """记录每日资产对比
+        
+        Args:
+            ai_account_id: AI账户ID
+            fill_missing_dates: 是否补全缺失的日期记录
+        """
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -1186,13 +1194,14 @@ class AISimulationService:
             outperformance = ai_return_rate - source_return_rate
 
             now = self._get_local_time()
+            today = now.strftime("%Y-%m-%d")
 
             # 记录或更新
             cursor.execute("""
                 INSERT OR REPLACE INTO ai_simulation_value_history
                 (ai_account_id, record_date, ai_value, source_value, ai_return_rate, source_return_rate, outperformance)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (ai_account_id, now.strftime("%Y-%m-%d"), ai_value, source_value,
+            """, (ai_account_id, today, ai_value, source_value,
                   ai_return_rate, source_return_rate, outperformance))
 
             conn.commit()
