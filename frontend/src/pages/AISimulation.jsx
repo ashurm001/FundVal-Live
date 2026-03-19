@@ -107,9 +107,9 @@ const AISimulation = () => {
 
   useEffect(() => {
     if (selectedAccount) {
-      // 首次加载：只加载基本信息和持仓（不加载历史数据）
+      // 首次加载：加载基本信息、持仓和历史数据
       fetchAccountDetail(selectedAccount.id, { 
-        include_history: false, 
+        include_history: true, 
         include_trades: false 
       });
     }
