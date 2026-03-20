@@ -124,6 +124,16 @@ async def update_ai_account_prices(ai_account_id: int):
         raise HTTPException(status_code=400, detail=f"更新失败: {str(e)}")
 
 
+@router.put("/accounts/{ai_account_id}/positions", response_model=Dict[str, Any])
+async def update_ai_position(ai_account_id: int, data: Dict[str, Any]):
+    """更新AI账户持仓"""
+    try:
+        result = ai_simulation_service.upsert_ai_position(ai_account_id, **data)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"更新持仓失败: {str(e)}")
+
+
 @router.delete("/accounts/{ai_account_id}", response_model=Dict[str, Any])
 async def delete_ai_account(ai_account_id: int):
     """删除AI模拟账户"""

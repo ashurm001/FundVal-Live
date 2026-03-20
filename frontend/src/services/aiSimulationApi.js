@@ -87,6 +87,15 @@ export const aiSimulationApi = {
    */
   getComparison: (aiAccountId) => {
     return api.get(`/ai-simulation/accounts/${aiAccountId}/comparison`);
+  },
+
+  /**
+   * 更新AI账户持仓
+   * @param {number} aiAccountId - AI账户ID
+   * @param {Object} data - 持仓数据
+   */
+  updatePosition: (aiAccountId, data) => {
+    return api.put(`/ai-simulation/accounts/${aiAccountId}/positions`, data);
   }
 };
 

@@ -332,7 +332,6 @@ const AISimulation = () => {
     try {
       await aiSimulationApi.updatePrices(selectedAccount.id);
       await fetchAccountDetail(selectedAccount.id);
-      alert('价格和收益已更新');
     } catch (err) {
       console.error('更新价格失败:', err);
       alert('更新失败: ' + (err.response?.data?.detail || err.message));
@@ -916,36 +915,46 @@ const AISimulation = () => {
                               <th className="text-left py-2 px-3 text-slate-500 font-medium">基金</th>
                               <th className="text-right py-2 px-3 text-slate-500 font-medium">交易</th>
                               <th className="text-right py-2 px-3 text-slate-500 font-medium">金额</th>
-                              <th className="text-left py-2 px-3 text-slate-500 font-medium w-[40%]">原因</th>
                             </tr>
                           </thead>
                           <tbody>
                             {accountDetail.trades.map(trade => (
-                              <tr key={trade.id} className="border-b border-slate-100 hover:bg-slate-50">
-                                <td className="py-2 px-3 text-slate-600 whitespace-nowrap">{trade.trade_date}</td>
-                                <td className="py-2 px-3">
-                                  <span className={`px-2 py-0.5 rounded font-medium whitespace-nowrap ${
-                                    trade.trade_type === 'buy' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                                  }`}>
-                                    {trade.trade_type === 'buy' ? '买入' : '卖出'}
-                                  </span>
-                                </td>
-                                <td className="py-2 px-3">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-slate-800">{trade.name || '-'}</span>
-                                    {trade.asset_type === 'crypto' && (
-                                      <span className="px-1 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">币</span>
-                                    )}
-                                  </div>
-                                  <div className="text-slate-400 font-mono">{trade.code}</div>
-                                </td>
-                                <td className="py-2 px-3 text-right">
-                                  <div className="font-mono">{trade.shares?.toFixed(4)}份</div>
-                                  <div className="font-mono text-slate-400">@{trade.price?.toFixed(4)}</div>
-                                </td>
-                                <td className="py-2 px-3 text-right font-mono whitespace-nowrap">{getCurrencySymbol()}{trade.amount?.toLocaleString()}</td>
-                                <td className="py-2 px-3 text-slate-500 whitespace-normal break-all">{trade.reason || '-'}</td>
-                              </tr>
+                              <>
+                                <tr key={trade.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                  <td className="py-2 px-3 text-slate-600 whitespace-nowrap">{trade.trade_date}</td>
+                                  <td className="py-2 px-3">
+                                    <span className={`px-2 py-0.5 rounded font-medium whitespace-nowrap ${
+                                      trade.trade_type === 'buy' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                                    }`}>
+                                      {trade.trade_type === 'buy' ? '买入' : '卖出'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-slate-800">{trade.name || '-'}</span>
+                                      {trade.asset_type === 'crypto' && (
+                                        <span className="px-1 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">币</span>
+                                      )}
+                                    </div>
+                                    <div className="text-slate-400 font-mono">{trade.code}</div>
+                                  </td>
+                                  <td className="py-2 px-3 text-right">
+                                    <div className="font-mono">{trade.shares?.toFixed(4)}份</div>
+                                    <div className="font-mono text-slate-400">@{trade.price?.toFixed(4)}</div>
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono whitespace-nowrap">{getCurrencySymbol()}{trade.amount?.toLocaleString()}</td>
+                                </tr>
+                                {trade.reason && (
+                                  <tr className="border-b border-slate-100 bg-slate-50/50">
+                                    <td colSpan="5" className="py-2 px-3">
+                                      <div className="flex items-start gap-2">
+                                        <span className="text-xs text-slate-400 font-medium whitespace-nowrap">原因:</span>
+                                        <span className="text-slate-800 whitespace-normal break-all leading-relaxed">{trade.reason}</span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
                             ))}
                           </tbody>
                         </table>
