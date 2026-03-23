@@ -32,6 +32,8 @@ Thumbs.db
 # 部署脚本（包含敏感信息）
 deploy-to-server.ps1
 deploy-server.sh
+deploy-all.ps1
+deploy-frontend.ps1
 
 # 压缩包
 *.zip
