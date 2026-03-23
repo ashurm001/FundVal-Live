@@ -34,6 +34,7 @@ deploy-to-server.ps1
 deploy-server.sh
 deploy-all.ps1
 deploy-frontend.ps1
+run-fix.ps1
 
 # 压缩包
 *.zip
