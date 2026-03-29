@@ -312,7 +312,7 @@ const AISimulation = () => {
         description: editForm.description,
         review_day_of_week: editForm.review_frequency === 'weekly' ? editForm.review_day : 0,
         review_interval_type: intervalMap[editForm.review_frequency],
-        review_interval: 1 // 默认间隔为1
+        review_interval: 1
       });
       setShowEditModal(false);
       await fetchAccounts();

@@ -84,6 +84,7 @@ class Config:
     SMTP_USER = _get_setting("SMTP_USER", "")
     SMTP_PASSWORD = _get_setting("SMTP_PASSWORD", "")
     EMAIL_FROM = _get_setting("EMAIL_FROM", "noreply@fundval.live")
+    NOTIFICATION_EMAIL = _get_setting("NOTIFICATION_EMAIL", "")
 
     @classmethod
     def reload(cls):
@@ -96,4 +97,5 @@ class Config:
         cls.SMTP_USER = _get_setting("SMTP_USER", "")
         cls.SMTP_PASSWORD = _get_setting("SMTP_PASSWORD", "")
         cls.EMAIL_FROM = _get_setting("EMAIL_FROM", "noreply@fundval.live")
+        cls.NOTIFICATION_EMAIL = _get_setting("NOTIFICATION_EMAIL", "")
 

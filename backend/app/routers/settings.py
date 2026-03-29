@@ -58,6 +58,8 @@ def get_settings():
                 "SMTP_USER": Config.SMTP_USER,
                 "SMTP_PASSWORD": "***" if Config.SMTP_PASSWORD else "",
                 "EMAIL_FROM": Config.EMAIL_FROM,
+                "NOTIFICATION_EMAIL": "",
+                "INTRADAY_COLLECT_INTERVAL": "5",
             }
 
         elapsed = time.time() - start_time
@@ -130,3 +132,46 @@ def update_settings(data: dict = Body(...)):
     except Exception as e:
         logger.error(f"Failed to update settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/test-email")
+def test_email():
+    """测试邮件发送功能"""
+    from ..services.email import send_email
+    
+    logger.info("开始测试邮件发送...")
+    logger.info(f"SMTP_HOST: {Config.SMTP_HOST}")
+    logger.info(f"SMTP_PORT: {Config.SMTP_PORT}")
+    logger.info(f"SMTP_USER: {Config.SMTP_USER}")
+    logger.info(f"EMAIL_FROM: {Config.EMAIL_FROM}")
+    logger.info(f"NOTIFICATION_EMAIL: {Config.NOTIFICATION_EMAIL}")
+    
+    if not Config.SMTP_HOST or not Config.SMTP_USER:
+        logger.error("SMTP未配置")
+        raise HTTPException(status_code=400, detail="SMTP未配置，请先设置SMTP服务器和用户")
+    
+    if not Config.NOTIFICATION_EMAIL:
+        logger.error("通知邮箱未配置")
+        raise HTTPException(status_code=400, detail="通知邮箱未配置，请先设置通知接收邮箱")
+    
+    subject = "【FundVal】邮件测试"
+    content = """
+    <h3>邮件测试成功</h3>
+    <p>这是一封测试邮件，如果您收到此邮件，说明邮件配置正确。</p>
+    <hr/>
+    <p>FundVal Live</p>
+    """
+    
+    try:
+        success = send_email(Config.NOTIFICATION_EMAIL, subject, content, is_html=True)
+        
+        if success:
+            logger.info(f"测试邮件发送成功到 {Config.NOTIFICATION_EMAIL}")
+            return {"success": True, "message": f"测试邮件已发送到 {Config.NOTIFICATION_EMAIL}"}
+        else:
+            logger.error("邮件发送函数返回False")
+            raise HTTPException(status_code=500, detail="邮件发送失败，请检查SMTP配置")
+    except Exception as e:
+        logger.error(f"邮件发送异常: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"邮件发送失败: {str(e)}")

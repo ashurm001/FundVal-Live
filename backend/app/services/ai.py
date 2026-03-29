@@ -143,14 +143,17 @@ class AIService:
             print(f"Failed to save analysis to database: {e}")
 
     def _save_fund_analysis_to_messages(self, fund_code: str, fund_name: str, analysis: Dict[str, Any]):
-        """保存单个基金分析结果到消息表"""
+        """保存单个基金分析结果到消息表并发送邮件"""
         try:
             from .messages import message_service
+            from .email import send_email
             import json
 
             risk_level = analysis.get("risk_level", "未知")
             status = analysis.get("indicators", {}).get("status", "--")
             summary = analysis.get("summary", "")
+            analysis_report = analysis.get("analysis_report", "")
+            indicators_desc = analysis.get("indicators", {}).get("desc", "")
 
             # 构建标题
             title = f"{fund_name} ({fund_code}) - AI分析"
@@ -162,7 +165,7 @@ class AIService:
                 "risk_level": risk_level,
                 "status": status,
                 "indicators": analysis.get("indicators", {}),
-                "analysis_report": analysis.get("analysis_report", ""),
+                "analysis_report": analysis_report,
                 "summary": summary
             }
 
@@ -176,6 +179,35 @@ class AIService:
                 "fund_count": 1,
                 "total_value": None
             })
+
+            # 发送邮件通知
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'NOTIFICATION_EMAIL'")
+                notif_row = cursor.fetchone()
+                notification_email = notif_row[0] if notif_row and notif_row[0] else None
+                conn.close()
+
+                if notification_email:
+                    now = self._get_local_time()
+                    email_content = f"""
+                    <h3>{fund_name} ({fund_code}) - AI分析报告</h3>
+                    <p><b>分析时间:</b> {now.strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    <p><b>风险等级:</b> {risk_level}</p>
+                    <p><b>状态:</b> {status}</p>
+                    <p><b>技术指标:</b> {indicators_desc}</p>
+                    <hr>
+                    <h4>分析摘要:</h4>
+                    <p>{summary}</p>
+                    <hr>
+                    <h4>详细分析:</h4>
+                    <div style="white-space: pre-wrap; font-family: monospace; font-size: 12px;">{analysis_report}</div>
+                    """
+                    if send_email(notification_email, title, email_content, is_html=True):
+                        print(f"[AI Service] 基金分析报告已发送到 {notification_email}")
+            except Exception as email_error:
+                print(f"[AI Service] 发送基金分析邮件失败: {str(email_error)}")
         except Exception as e:
             print(f"Failed to save fund analysis to messages: {e}")
 
@@ -482,15 +514,19 @@ class AIService:
             }
 
     def _save_portfolio_analysis_to_messages(self, result: Dict[str, Any], asset_count: int, total_value: float, is_crypto: bool = False):
-        """保存持仓分析结果到消息表"""
+        """保存持仓分析结果到消息表并发送邮件"""
         try:
             from .messages import message_service
+            from .email import send_email
+            import json
 
             # 从新的返回结构中提取信息
             risk_analysis = result.get("risk_analysis", {})
             risk_level = risk_analysis.get("risk_rating", "未知")
             overview = result.get("overview", {})
             conclusion = result.get("conclusion", "")
+            portfolio_overview = result.get("portfolio_overview", {})
+            asset_allocation = result.get("asset_allocation", {})
 
             # 构建标题
             asset_type = "数字货币" if is_crypto else "基金"
@@ -510,6 +546,47 @@ class AIService:
                 "total_value": total_value,
                 "is_crypto": is_crypto
             })
+
+            # 发送邮件通知
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM settings WHERE key = 'NOTIFICATION_EMAIL'")
+                notif_row = cursor.fetchone()
+                notification_email = notif_row[0] if notif_row and notif_row[0] else None
+                conn.close()
+
+                if notification_email:
+                    now = self._get_local_time()
+                    
+                    # 构建资产分配信息
+                    allocation_html = ""
+                    for asset_type_name, data in asset_allocation.items():
+                        allocation_html += f"<li><b>{asset_type_name}:</b> {data.get('value', 0):.2f}元 ({data.get('percentage', 0):.1f}%)</li>"
+                    
+                    email_content = f"""
+                    <h3>{title}</h3>
+                    <p><b>分析时间:</b> {now.strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    <hr>
+                    <h4>账户概览:</h4>
+                    <ul>
+                        <li><b>资产数量:</b> {portfolio_overview.get('asset_count', 0)}</li>
+                        <li><b>总市值:</b> {total_value:.2f}元</li>
+                        <li><b>总成本:</b> {portfolio_overview.get('total_income', 0) + portfolio_overview.get('total_cost', 0) if portfolio_overview.get('total_cost', 0) else '--':.2f}元</li>
+                        <li><b>总收益:</b> {portfolio_overview.get('total_income', 0):.2f}元</li>
+                        <li><b>收益率:</b> {portfolio_overview.get('return_rate', 0):.2f}%</li>
+                        <li><b>风险等级:</b> {risk_level}</li>
+                    </ul>
+                    <h4>资产分配:</h4>
+                    <ul>{allocation_html}</ul>
+                    <hr>
+                    <h4>分析结论:</h4>
+                    <div style="white-space: pre-wrap;">{conclusion}</div>
+                    """
+                    if send_email(notification_email, title, email_content, is_html=True):
+                        print(f"[AI Service] 持仓分析报告已发送到 {notification_email}")
+            except Exception as email_error:
+                print(f"[AI Service] 发送持仓分析邮件失败: {str(email_error)}")
         except Exception as e:
             print(f"Failed to save portfolio analysis to messages: {e}")
 

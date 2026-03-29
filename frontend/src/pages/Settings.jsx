@@ -19,6 +19,7 @@ export default function Settings() {
     SMTP_USER: '',
     SMTP_PASSWORD: '',
     EMAIL_FROM: '',
+    NOTIFICATION_EMAIL: '',
     INTRADAY_COLLECT_INTERVAL: '5'
   });
 
@@ -53,6 +54,9 @@ export default function Settings() {
     }
     if (settings.EMAIL_FROM && !emailRegex.test(settings.EMAIL_FROM)) {
       newErrors.EMAIL_FROM = '邮箱格式不正确';
+    }
+    if (settings.NOTIFICATION_EMAIL && !emailRegex.test(settings.NOTIFICATION_EMAIL)) {
+      newErrors.NOTIFICATION_EMAIL = '邮箱格式不正确';
     }
 
     // Port validation
@@ -288,6 +292,27 @@ export default function Settings() {
           {errors.EMAIL_FROM && (
             <p className="mt-1 text-sm text-red-600">{errors.EMAIL_FROM}</p>
           )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            通知接收邮箱
+          </label>
+          <input
+            type="email"
+            value={settings.NOTIFICATION_EMAIL}
+            onChange={(e) => handleChange('NOTIFICATION_EMAIL', e.target.value)}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              errors.NOTIFICATION_EMAIL ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="your@email.com"
+          />
+          {errors.NOTIFICATION_EMAIL && (
+            <p className="mt-1 text-sm text-red-600">{errors.NOTIFICATION_EMAIL}</p>
+          )}
+          <p className="mt-2 text-sm text-gray-500">
+            AI审视报告等系统通知将发送到此邮箱
+          </p>
         </div>
       </div>
 

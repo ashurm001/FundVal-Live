@@ -55,5 +55,8 @@ logs
 .coverage
 htmlcov
 
+# Data
+backend/data
+
 # Claude
 .claude

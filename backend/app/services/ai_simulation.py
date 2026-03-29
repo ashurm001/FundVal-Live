@@ -601,7 +601,10 @@ class AISimulationService:
             
             try:
                 cursor.execute("""
-                    SELECT * FROM ai_simulation_accounts WHERE id = ?
+                    SELECT id, name, description, source_account_id, source_type, initial_capital,
+                           current_value, total_return_rate, is_active, review_day_of_week,
+                           review_interval_type, review_interval, last_review_date
+                    FROM ai_simulation_accounts WHERE id = ?
                 """, (ai_account_id,))
                 account = cursor.fetchone()
                 if not account:
@@ -609,8 +612,12 @@ class AISimulationService:
                     return {"error": "AI账户不存在"}
 
                 source_account_id = account[3]
-                source_type = account[12] if len(account) > 12 else 'fund'
-                initial_capital = account[5] if len(account) > 5 else 0.0
+                source_type = account[4] if account[4] else 'fund'
+                initial_capital = account[5] if account[5] else 0.0
+                
+                cursor.execute("SELECT value FROM settings WHERE key = 'NOTIFICATION_EMAIL'")
+                notif_row = cursor.fetchone()
+                notification_email = notif_row[0] if notif_row and notif_row[0] else None
                 
                 conn.close()
                 break
@@ -1129,6 +1136,66 @@ class AISimulationService:
                     print(f"[AI Simulation] 审视报告已保存到消息系统")
                 except Exception as msg_error:
                     print(f"[AI Simulation] 保存消息失败: {str(msg_error)}")
+
+                # 发送邮件通知
+                if notification_email:
+                    try:
+                        from .email import send_email
+                        
+                        account_name = account[1]
+                        account_type_desc = "数字货币账户" if source_type == 'crypto' else "基金账户"
+                        
+                        # 构建交易列表HTML
+                        trades_html = ""
+                        if final_trades:
+                            trades_html = "<h4>执行交易：</h4><ul>"
+                            for trade in final_trades:
+                                trade_type_cn = "买入" if trade["trade_type"] == "buy" else "卖出"
+                                trades_html += f"<li>{trade_type_cn} {trade['name']} ({trade['code']}): {trade['shares']:.4f}份 @ {trade['price']:.4f}，金额: {trade['amount']:.2f}</li>"
+                                if trade.get("reason"):
+                                    trades_html += f"<br/><small>原因: {trade['reason']}</small>"
+                            trades_html += "</ul>"
+                        else:
+                            trades_html = "<p>本次审视未执行任何交易。</p>"
+                        
+                        # 构建邮件内容
+                        subject = f"【AI审视报告】{account_name} - {now.strftime('%Y-%m-%d')}"
+                        content = f"""
+                        <h3>AI模拟账户审视报告</h3>
+                        <p><b>账户名称:</b> {account_name}</p>
+                        <p><b>账户类型:</b> {account_type_desc}</p>
+                        <p><b>审视日期:</b> {now.strftime('%Y-%m-%d')}</p>
+                        
+                        <h4>收益对比：</h4>
+                        <ul>
+                            <li>AI账户总市值: {ai_total_value:,.2f}</li>
+                            <li>AI账户收益率: {ai_return_rate:.2f}%</li>
+                            <li>用户账户总市值: {source_total_value:,.2f}</li>
+                            <li>用户账户收益率: {source_return_rate:.2f}%</li>
+                            <li>超额收益: {ai_return_rate - source_return_rate:.2f}%</li>
+                        </ul>
+                        
+                        <h4>市场分析：</h4>
+                        <p>{review_data.get("market_analysis", "无")}</p>
+                        
+                        <h4>持仓分析：</h4>
+                        <p>{review_data.get("portfolio_analysis", "无")}</p>
+                        
+                        <h4>调仓策略：</h4>
+                        <p>{review_data.get("adjustment_strategy", "无")}</p>
+                        
+                        {trades_html}
+                        
+                        <hr/>
+                        <p>此邮件由 FundVal Live 自动发送。</p>
+                        """
+                        
+                        if send_email(notification_email, subject, content, is_html=True):
+                            print(f"[AI Simulation] 审视报告已发送到 {notification_email}")
+                        else:
+                            print(f"[AI Simulation] 邮件发送失败")
+                    except Exception as email_error:
+                        print(f"[AI Simulation] 发送邮件失败: {str(email_error)}")
 
                 return {
                     "success": True,

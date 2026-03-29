@@ -103,7 +103,8 @@ def init_db():
         ('SMTP_USER', '', 0),
         ('SMTP_PASSWORD', '', 1),
         ('EMAIL_FROM', 'noreply@fundval.live', 0),
-        ('INTRADAY_COLLECT_INTERVAL', '5', 0),  # 分时数据采集间隔（分钟）
+        ('NOTIFICATION_EMAIL', '', 0),
+        ('INTRADAY_COLLECT_INTERVAL', '5', 0),
     ]
 
     cursor.executemany("""
