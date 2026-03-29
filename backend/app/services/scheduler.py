@@ -472,6 +472,7 @@ def start_scheduler():
         last_cleanup_date = None
         last_nav_update_hour = None
         last_estimation_update_time = None
+        last_daily_value_record_date = None
 
         while True:
             try:
@@ -543,9 +544,18 @@ def start_scheduler():
                     last_nav_update_hour = now_cst.hour
 
                 # AI模拟账户每日价格和收益更新（每天22:30执行一次）
+                # 增强健壮性：使用时间窗口检查，允许22:30-23:00之间执行
                 try:
-                    current_time_str = now_cst.strftime("%H:%M")
-                    if current_time_str == "22:30":
+                    current_hour = now_cst.hour
+                    current_minute = now_cst.minute
+                    
+                    # 检查是否在执行窗口内（22:30-23:00）且今天尚未执行
+                    should_run = (
+                        current_hour == 22 and current_minute >= 30 or  # 22:30-22:59
+                        current_hour == 23 and current_minute == 0      # 23:00
+                    ) and last_daily_value_record_date != today_str
+                    
+                    if should_run:
                         ai_conn = get_db_connection()
                         ai_cursor = ai_conn.cursor()
                         ai_cursor.execute("""
@@ -563,6 +573,9 @@ def start_scheduler():
                                 logger.info(f"AI account {acc_id} daily value recorded")
                             except Exception as e:
                                 logger.error(f"AI account {acc_id} daily value record error: {e}")
+                        
+                        last_daily_value_record_date = today_str
+                        logger.info("AI daily value record completed for today")
                 except Exception as e:
                     logger.error(f"AI daily value record check error: {e}")
 
